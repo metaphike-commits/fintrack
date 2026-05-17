@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useEffect } from "react";
+
 interface GaugeCircleProps {
   value: number; // 0–100
   size?: number;
@@ -8,10 +10,6 @@ interface GaugeCircleProps {
   children?: React.ReactNode;
 }
 
-/**
- * SVG speedometer-style gauge (270° arc, opens at bottom).
- * `value` maps 0–100 to empty–full arc.
- */
 export function GaugeCircle({
   value,
   size = 90,
@@ -19,12 +17,20 @@ export function GaugeCircle({
   color,
   children,
 }: GaugeCircleProps) {
+  const [displayValue, setDisplayValue] = useState(0);
+
+  // Start from 0 and animate to target on mount/value change via CSS transition
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setDisplayValue(value));
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+
   const r = (size - strokeWidth) / 2 - 2;
   const cx = size / 2;
   const cy = size / 2;
   const circumference = 2 * Math.PI * r;
-  const trackArc = circumference * 0.75; // 270°
-  const valueArc = trackArc * Math.min(1, Math.max(0, value / 100));
+  const trackArc = circumference * 0.75;
+  const valueArc = trackArc * Math.min(1, Math.max(0, displayValue / 100));
 
   return (
     <div
@@ -50,7 +56,7 @@ export function GaugeCircle({
           strokeLinecap="round"
           transform={`rotate(135 ${cx} ${cy})`}
         />
-        {/* Value arc */}
+        {/* Value arc — animates via CSS transition from 0 */}
         <circle
           cx={cx}
           cy={cy}
@@ -61,11 +67,10 @@ export function GaugeCircle({
           strokeDasharray={`${valueArc} ${circumference}`}
           strokeLinecap="round"
           transform={`rotate(135 ${cx} ${cy})`}
-          style={{ transition: "stroke-dasharray 0.7s cubic-bezier(0.4,0,0.2,1)" }}
+          style={{ transition: "stroke-dasharray 0.85s cubic-bezier(0.16,1,0.3,1)" }}
         />
       </svg>
 
-      {/* Center label */}
       <div className="relative z-10 flex flex-col items-center justify-center leading-none">
         {children}
       </div>

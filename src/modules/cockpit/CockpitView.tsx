@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import { useStaggerEntrance } from "@/hooks/useStaggerEntrance";
 import { useRouter } from "next/navigation";
 import { Maximize2 } from "lucide-react";
 import { useBaseFinanciereStore } from "@/store/baseFinanciere";
@@ -242,6 +243,7 @@ export function CockpitView() {
   const epargneCeMois = revenusAVenir - depensesAVenir;
 
   const hasData = totalRevenus > 0 || totalDepenses > 0;
+  const statBoxRef = useStaggerEntrance<HTMLDivElement>({ startDelay: 80, duration: 420 });
 
   const today = new Date().toLocaleDateString("fr-FR", {
     weekday: "long",
@@ -337,6 +339,7 @@ export function CockpitView() {
 
             {/* Bottom stats */}
             <div
+              ref={statBoxRef}
               className="grid gap-3"
               style={{
                 gridTemplateColumns: `repeat(${4 + (totalEngagements > 0 ? 1 : 0) + (burnRateResult !== null ? 1 : 0)}, minmax(0, 1fr))`,

@@ -21,6 +21,7 @@ import {
   type MoisStatFull, type Insight,
 } from "@/lib/analyse";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { useStaggerEntrance } from "@/hooks/useStaggerEntrance";
 import { Button } from "@/components/ui/Button";
 import { BudgetVsReel } from "./BudgetVsReel";
 import { cn } from "@/lib/cn";
@@ -627,6 +628,8 @@ function Recommandations({ recos }: { recos: Reco[] }) {
 export function AnalyseView() {
   const { transactions, clearAll } = useTransactionsStore();
 
+  const kpiRowRef = useStaggerEntrance<HTMLDivElement>({ duration: 480 });
+
   const tendance     = useMemo(() => getTendanceFull(transactions), [transactions]);
   const topCat       = useMemo(() => getTopCategories(transactions), [transactions]);
   const anomalies    = useMemo(() => detectAnomalies(transactions, 6), [transactions]);
@@ -744,7 +747,7 @@ export function AnalyseView() {
       <div className="flex-1 overflow-y-auto p-5 space-y-4">
 
         {/* KPI Row */}
-        <div className="grid grid-cols-6 gap-3">
+        <div ref={kpiRowRef} className="grid grid-cols-6 gap-3">
           <KpiCard label="Revenus totaux"      value={fmt(totalRevenu)}  sparkData={revSpark}  color="#22c55e"  delta={deltaRev}  deltaLabel="vs M-1" />
           <KpiCard label="Dépenses totales"    value={fmt(totalDepense)} sparkData={depSpark}  color="#ef4444"  delta={deltaDep !== undefined ? -deltaDep : undefined} deltaLabel="vs M-1" />
           <KpiCard label="Épargne nette"        value={fmt(net)}          sparkData={netSpark}  color={net >= 0 ? "#22c55e" : "#ef4444"} delta={deltaNet} deltaLabel="vs M-1" />

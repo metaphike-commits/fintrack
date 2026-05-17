@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
 import { MobileTopBar } from "@/components/ui/MobileTopBar";
 import { cn } from "@/lib/cn";
+import { animate } from "animejs";
 
 export interface AppShellProps {
   sidebar: React.ReactNode;
@@ -15,6 +16,19 @@ export interface AppShellProps {
 export function AppShell({ sidebar, title = "Fintrack", children }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const pathname = usePathname();
+  const mainRef = useRef<HTMLElement>(null);
+
+  // Page entrance animation on route change
+  useEffect(() => {
+    if (!mainRef.current) return;
+    const anim = animate(mainRef.current, {
+      opacity: [0, 1],
+      translateY: [10, 0],
+      duration: 300,
+      ease: "outQuart",
+    });
+    return () => { anim.pause(); };
+  }, [pathname]);
 
   // Close drawer on route change
   useEffect(() => {
@@ -54,7 +68,6 @@ export function AppShell({ sidebar, title = "Fintrack", children }: AppShellProp
           drawerOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        {/* Close button row */}
         <div className="flex items-center justify-end px-3 py-2 bg-surface-elevated border-b border-border">
           <button
             onClick={() => setDrawerOpen(false)}
@@ -69,13 +82,12 @@ export function AppShell({ sidebar, title = "Fintrack", children }: AppShellProp
 
       {/* Main column */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        {/* Mobile top bar */}
         <div className="md:hidden shrink-0">
           <MobileTopBar title={title} onMenuOpen={() => setDrawerOpen(true)} />
         </div>
-
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main ref={mainRef} className="flex-1 overflow-y-auto">
+          {children}
+        </main>
       </div>
     </div>
   );

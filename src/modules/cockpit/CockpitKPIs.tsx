@@ -8,6 +8,7 @@ import {
   type FragiliteResult,
 } from "@/lib/tensionScore";
 import type { RunwayResult } from "@/lib/runway";
+import { useStaggerEntrance } from "@/hooks/useStaggerEntrance";
 
 function fmt(n: number) {
   return n.toLocaleString("fr-FR", {
@@ -20,7 +21,7 @@ function fmt(n: number) {
 interface CockpitKPIsProps {
   runway: RunwayResult;
   fragilite: FragiliteResult;
-  momentum: number | null; // days/month
+  momentum: number | null;
   soldeEffectif: number | null;
   monthlyNet: number;
 }
@@ -32,8 +33,10 @@ export function CockpitKPIs({
   soldeEffectif,
   monthlyNet,
 }: CockpitKPIsProps) {
+  const gridRef = useStaggerEntrance<HTMLDivElement>({ duration: 500, y: 18 });
+
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div ref={gridRef} className="grid grid-cols-3 gap-4">
       {/* ── Runway ───────────────────────────────────────────── */}
       <KPICard label="RUNWAY">
         <GaugeCircle
