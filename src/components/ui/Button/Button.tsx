@@ -17,23 +17,46 @@ export interface ButtonProps
 }
 
 const BASE =
-  "inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap select-none transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-40";
+  "inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap select-none " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent " +
+  "disabled:pointer-events-none disabled:opacity-40 " +
+  "transition-all duration-200 active:scale-[0.97]";
 
 const VARIANTS: Record<ButtonVariant, string> = {
   primary:
-    "bg-accent text-white hover:bg-accent-hover rounded-md shadow-sm active:scale-[0.98]",
+    "text-white rounded-xl",
   secondary:
-    "bg-surface-elevated text-ink border border-border hover:border-border-strong rounded-md shadow-sm active:scale-[0.98]",
+    "text-ink rounded-xl",
   ghost:
-    "text-ink-soft hover:bg-surface-elevated hover:text-ink rounded-md active:scale-[0.98]",
+    "text-ink-soft hover:text-ink rounded-xl",
   danger:
-    "bg-critique text-white hover:opacity-90 rounded-md shadow-sm active:scale-[0.98]",
+    "text-white rounded-xl",
 };
 
 const SIZES: Record<ButtonSize, string> = {
   sm: "h-7 px-3 text-xs",
   md: "h-9 px-4 text-sm",
   lg: "h-11 px-5 text-base",
+};
+
+const VARIANT_STYLES: Record<ButtonVariant, React.CSSProperties> = {
+  primary: {
+    background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
+    boxShadow: "0 0 20px rgba(139,92,246,0.30), inset 0 1px 0 rgba(255,255,255,0.15)",
+  },
+  secondary: {
+    background:
+      "linear-gradient(var(--surface-elevated), var(--surface-elevated)) padding-box, " +
+      "linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04)) border-box",
+    border: "1px solid transparent",
+  },
+  ghost: {
+    background: "transparent",
+  },
+  danger: {
+    background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+    boxShadow: "0 0 18px rgba(239,68,68,0.25), inset 0 1px 0 rgba(255,255,255,0.12)",
+  },
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -45,6 +68,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       leftIcon,
       rightIcon,
       className,
+      style,
       children,
       disabled,
       ...props
@@ -56,6 +80,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || loading}
         className={cn(BASE, VARIANTS[variant], SIZES[size], className)}
+        style={{ ...VARIANT_STYLES[variant], ...style }}
         {...props}
       >
         {loading ? (

@@ -432,11 +432,25 @@ function StatBox({
   prefix?: string;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-surface-elevated p-4">
-      <p className="text-[10px] font-mono uppercase tracking-widest text-ink-ghost mb-2">
+    <div
+      className="rounded-xl p-4 relative overflow-hidden card-hover"
+      style={{
+        background: "rgba(255,255,255,0.03)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        border: "1px solid rgba(255,255,255,0.07)",
+      }}
+    >
+      <p className="text-[9px] font-mono uppercase tracking-[0.15em] text-ink-ghost mb-2">
         {label}
       </p>
-      <p className="text-base font-bold tabular-nums leading-none" style={{ color }}>
+      <p
+        className="text-sm font-bold tabular-nums leading-none"
+        style={{
+          color,
+          textShadow: color ? `0 0 16px ${color}60` : undefined,
+        }}
+      >
         {prefix && value !== "—" ? prefix : ""}
         {value}
       </p>

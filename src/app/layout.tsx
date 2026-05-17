@@ -18,7 +18,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="fr" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="fr" className={`${GeistSans.variable} ${GeistMono.variable} dark`}>
       <body>
         <ThemeProvider>
           <ToastProvider>
