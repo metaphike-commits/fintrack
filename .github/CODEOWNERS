@@ -1,0 +1,16 @@
+# CODEOWNERS
+# Chaque PR doit être approuvée par le propriétaire du domaine concerné.
+# Format : [pattern] [owner]
+
+# Propriétaire global
+* @hamza
+
+# Documentation — validation Hamza obligatoire
+docs/DECISIONS.md @hamza
+docs/PROJECT_BRIEF.md @hamza
+AGENTS.md @hamza
+CLAUDE.md @hamza
+
+# Design system — validation Hamza obligatoire avant merge sur dev
+src/styles/ @hamza
+src/components/ui/ @hamza

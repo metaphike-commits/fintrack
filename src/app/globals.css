@@ -1,0 +1,132 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Light theme (default) ──────────────────────────────────── */
+:root {
+  --surface: #f7f7f8;
+  --surface-elevated: #ffffff;
+  --surface-overlay: rgba(255, 255, 255, 0.80);
+  --accent: #3b82f6;
+  --accent-soft: #dbeafe;
+  --accent-hover: #2563eb;
+  --calm: #22c55e;
+  --calm-soft: #dcfce7;
+  --attention: #f59e0b;
+  --attention-soft: #fef3c7;
+  --critique: #ef4444;
+  --critique-soft: #fee2e2;
+  --ink: #111827;
+  --ink-soft: #6b7280;
+  --ink-ghost: #d1d5db;
+  --border: #e5e7eb;
+  --border-strong: #9ca3af;
+  --muted: #9ca3af;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.10), 0 4px 6px rgba(0, 0, 0, 0.05);
+
+  --transition-fast: 100ms ease;
+  --transition-default: 150ms ease;
+  --transition-slow: 250ms ease;
+}
+
+/* ── Dark theme ─────────────────────────────────────────────── */
+.dark {
+  --surface: #0f0f14;
+  --surface-elevated: #1a1a24;
+  --surface-overlay: rgba(26, 26, 36, 0.93);
+  --accent: #60a5fa;
+  --accent-soft: #1e3a5f;
+  --accent-hover: #93c5fd;
+  --calm: #4ade80;
+  --calm-soft: #14532d;
+  --attention: #fbbf24;
+  --attention-soft: #451a03;
+  --critique: #f87171;
+  --critique-soft: #3d1212;
+  --ink: #f1f5f9;
+  --ink-soft: #94a3b8;
+  --ink-ghost: #374151;
+  --border: #2a2a38;
+  --border-strong: #4b5563;
+  --muted: #6b7280;
+}
+
+/* ── Focus theme (immersion) ────────────────────────────────── */
+.focus-mode {
+  --surface: #06060a;
+  --surface-elevated: #0d0d14;
+  --surface-overlay: rgba(13, 13, 20, 0.95);
+  --accent: #60a5fa;
+  --accent-soft: #0f1e33;
+  --accent-hover: #93c5fd;
+  --calm: #4ade80;
+  --calm-soft: #0a2e1a;
+  --attention: #fbbf24;
+  --attention-soft: #2c1a08;
+  --critique: #fb923c;
+  --critique-soft: #2c1a08;
+  --ink: #e2e8f0;
+  --ink-soft: #64748b;
+  --ink-ghost: #1f2937;
+  --border: #1a1a28;
+  --border-strong: #374151;
+  --muted: #4b5563;
+}
+
+/* ── Reset ──────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  background-color: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color var(--transition-slow), color var(--transition-slow);
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
+/* ── Focus ring ─────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ── Tabular numbers for financial data ─────────────────────── */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
