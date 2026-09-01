@@ -23,14 +23,10 @@ const BASE =
   "transition-all duration-200 active:scale-[0.97]";
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary:
-    "text-white rounded-xl",
-  secondary:
-    "text-ink rounded-xl",
-  ghost:
-    "text-ink-soft hover:text-ink rounded-xl",
-  danger:
-    "text-white rounded-xl",
+  primary:   "text-white rounded-xl",
+  secondary: "text-ink rounded-xl",
+  ghost:     "text-ink-soft hover:text-ink rounded-xl",
+  danger:    "text-white rounded-xl",
 };
 
 const SIZES: Record<ButtonSize, string> = {
@@ -41,8 +37,8 @@ const SIZES: Record<ButtonSize, string> = {
 
 const VARIANT_STYLES: Record<ButtonVariant, React.CSSProperties> = {
   primary: {
-    background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
-    boxShadow: "0 0 20px rgba(139,92,246,0.30), inset 0 1px 0 rgba(255,255,255,0.15)",
+    background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)",
+    boxShadow: "0 0 20px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.15)",
   },
   secondary: {
     background:
@@ -61,18 +57,8 @@ const VARIANT_STYLES: Record<ButtonVariant, React.CSSProperties> = {
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   function Button(
-    {
-      variant = "primary",
-      size = "md",
-      loading = false,
-      leftIcon,
-      rightIcon,
-      className,
-      style,
-      children,
-      disabled,
-      ...props
-    },
+    { variant = "primary", size = "md", loading = false,
+      leftIcon, rightIcon, className, style, children, disabled, ...props },
     ref
   ) {
     return (

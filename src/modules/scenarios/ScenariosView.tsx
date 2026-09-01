@@ -3,9 +3,8 @@
 import { useState, useMemo } from "react";
 import { Plus, Pencil, Trash2, ArrowUpRight, GitBranch } from "lucide-react";
 import { useBaseFinanciereStore } from "@/store/baseFinanciere";
-import { useCompteStore } from "@/store/compte";
-import { useComptesStore, getSoldeRunway } from "@/store/comptes";
 import { usePreferencesStore } from "@/store/preferences";
+import { useSoldeEffectif } from "@/hooks/useSoldeEffectif";
 import { useScenariosStore, SCENARIO_COLORS, type Scenario } from "@/store/scenarios";
 import {
   computeBaseNet,
@@ -408,10 +407,9 @@ function ScenarioCard({
 
 export function ScenariosView() {
   const { items: baseItems, addItem: addBaseItem } = useBaseFinanciereStore();
-  const { soldeCourant } = useCompteStore();
-  const comptes = useComptesStore((s) => s.comptes);
-  const soldeRunway = getSoldeRunway(comptes);
-  const soldeEffectif = soldeRunway ?? soldeCourant ?? 0;
+  // `?? 0` preservé : contrairement aux autres vues, Scénarios n'a pas d'état
+  // "pas de données" — elle affiche toujours des chiffres, même à 0.
+  const soldeEffectif = useSoldeEffectif() ?? 0;
   const { confortThreshold } = usePreferencesStore();
   const { scenarios, deleteScenario } = useScenariosStore();
 
@@ -419,7 +417,7 @@ export function ScenariosView() {
   const [editingScenario, setEditingScenario] = useState<Scenario | undefined>();
 
   const active = useMemo(() => baseItems.filter((i) => !i.archived), [baseItems]);
-  const baseNet = useMemo(() => computeBaseNet(active), [active]);
+  const baseNet = useMemo(() => computeBaseNet(active, new Date()), [active]);
   const baseJours = runwayDays(soldeEffectif, baseNet);
 
   const baseProj90 = useMemo(
@@ -481,6 +479,12 @@ export function ScenariosView() {
               {scenarios.length}
             </span>
           )}
+          <span
+            className="text-[9px] px-1.5 py-0.5 rounded font-mono ml-1"
+            style={{ background: "rgba(245,158,11,0.12)", color: "#f59e0b" }}
+          >
+            Simulation
+          </span>
         </div>
         {hasBase && (
           <Button size="sm" leftIcon={<Plus size={13} />} onClick={openNew}>

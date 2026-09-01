@@ -4,29 +4,21 @@ import { useState } from "react";
 import {
   CheckCircle2, ArrowRight, RotateCcw, ExternalLink,
   Sparkles, Clock, TrendingUp, TrendingDown, Minus,
-  Link2, Link2Off,
+  Link2, Link2Off, Trash2, AlertTriangle, Building2,
 } from "lucide-react";
 import Link from "next/link";
 import { useImportStore, normalizeLabel, type CategorizedRow } from "@/store/importIA";
 import { useBaseFinanciereStore } from "@/store/baseFinanciere";
 import { useTransactionsStore } from "@/store/transactions";
+import { useComptesStore } from "@/store/comptes";
 import { usePreferencesStore } from "@/store/preferences";
 import { parseFile } from "@/lib/csvParser";
 import { findMatch } from "@/lib/reconcile";
+import { CATEGORY_OPTGROUPS } from "@/lib/categories";
 import { DropZone } from "./DropZone";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { cn } from "@/lib/cn";
-
-const CATEGORY_GROUPS = [
-  { group: "Revenus",       items: ["salaire", "freelance", "remboursement", "allocation"] },
-  { group: "Logement",      items: ["loyer", "électricité", "eau", "internet"] },
-  { group: "Transport",     items: ["transport", "stationnement", "carburant"] },
-  { group: "Vie courante",  items: ["alimentation", "restauration", "santé", "loisirs", "vêtements"] },
-  { group: "Financier",     items: ["abonnements", "assurance", "épargne", "crédit", "impôts", "amende"] },
-  { group: "Autre",         items: ["autre"] },
-] as const;
-
 
 const STEPS = ["Fichier", "Prévisualisation", "Validation", "Importé"];
 
@@ -100,15 +92,40 @@ function SummaryBar({ rows }: { rows: CategorizedRow[] }) {
   );
 }
 
+const BANKS = [
+  "BNP Paribas", "Société Générale", "Crédit Agricole", "LCL",
+  "Boursorama", "Crédit Mutuel", "CIC", "Hello Bank",
+  "N26", "Revolut", "Lydia", "Autre",
+];
+
 export function ImportView() {
   const store = useImportStore();
   const { items: baseItems } = useBaseFinanciereStore();
-  const { addTransactions, addImportSession, importSessions } = useTransactionsStore();
+  const { addTransactions, addImportSession, deleteImportSession, importSessions } = useTransactionsStore();
+  const comptes = useComptesStore((s) => s.comptes);
   const { reconciliationAmountTol } = usePreferencesStore();
   const [error, setError] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
+  const [parsingLabel, setParsingLabel] = useState("Analyse en cours…");
   const [filter, setFilter] = useState<FilterTab>("all");
   const [propagation, setPropagation] = useState<{ label: string; count: number } | null>(null);
+  const [selectedCompteId, setSelectedCompteId] = useState<string | null>(null);
+  const [selectedBank, setSelectedBank] = useState<string | null>(null);
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+
+  // Bank hint for AI categorization: compte institution if compte selected, else free-pick bank
+  const bankHint = selectedCompteId
+    ? (comptes.find((c) => c.id === selectedCompteId)?.institution ?? null)
+    : selectedBank;
+
+  function handleToggleReconcile(r: CategorizedRow) {
+    const newReconciled = !r.reconciled;
+    store.setReconciled(r.id, newReconciled);
+    if (newReconciled && r.matchedItemId) {
+      const matched = baseItems.find((i) => i.id === r.matchedItemId);
+      if (matched?.categorie) store.updateRow(r.id, { categorie: matched.categorie });
+    }
+  }
 
   function handleCategorieChange(row: CategorizedRow, newCategorie: string) {
     const count = store.updateCategorieBySimilarLabel(row.id, newCategorie);
@@ -126,16 +143,31 @@ export function ImportView() {
     : store.step === "validation" ? 2
     : 3;
 
-  async function handleFile(file: File) {
+  async function handleFiles(files: File[]) {
     setError(null);
     setParsing(true);
+    const label = files.length > 1
+      ? `Analyse de ${files.length} fichiers en cours…`
+      : "Analyse en cours…";
+    setParsingLabel(label);
     try {
-      const rows = await parseFile(file);
-      if (rows.length === 0) { setError("Aucune transaction détectée. Vérifiez le format du fichier."); return; }
-      store.setFile(file.name, rows);
-      await handleCategorize(rows); // auto-categorize immediately — skip manual button
+      const results = await Promise.allSettled(files.map(f => parseFile(f)));
+      const rows = results.flatMap((r, i) => {
+        if (r.status === "fulfilled") return r.value;
+        console.warn(`[import] ${files[i].name}:`, r.reason);
+        return [];
+      });
+      if (rows.length === 0) {
+        setError("Aucune transaction détectée. Vérifiez le format des fichiers.");
+        return;
+      }
+      const fileName = files.length === 1
+        ? files[0].name
+        : `${files.length} fichiers (${files[0].name}…)`;
+      store.setFile(fileName, rows);
+      await handleCategorize(rows);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Impossible de lire ce fichier.");
+      setError(e instanceof Error ? e.message : "Impossible de lire ces fichiers.");
     } finally {
       setParsing(false);
     }
@@ -149,7 +181,7 @@ export function ImportView() {
       const res = await fetch("/api/ai/categorize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: toProcess }),
+        body: JSON.stringify({ rows: toProcess, bank: bankHint ?? undefined }),
       });
       const data = await res.json();
       const catMap = new Map<string, string>(
@@ -174,13 +206,23 @@ export function ImportView() {
   }
 
   function handleImport() {
+    const sessionId = crypto.randomUUID();
     const toImport = store.rows.filter((r) => r.include);
     const reconciledCount = toImport.filter((r) => r.reconciled).length;
     addTransactions(toImport.map((r) => ({
       id: r.id, date: r.date, label: r.label, montant: r.montant, direction: r.direction,
       categorie: r.categorie, reconciledItemId: r.reconciled ? r.matchedItemId : undefined,
+      importSessionId: sessionId,
+      compteId: selectedCompteId ?? undefined,
     })));
-    addImportSession({ fileName: store.fileName, transactionCount: toImport.length, reconciledCount });
+    addImportSession({
+      id: sessionId,
+      fileName: store.fileName,
+      transactionCount: toImport.length,
+      reconciledCount,
+      bank: bankHint ?? undefined,
+      compteId: selectedCompteId ?? undefined,
+    });
     store.setImportedCount(toImport.length);
     store.setStep("done");
   }
@@ -215,6 +257,52 @@ export function ImportView() {
           {/* ── Upload ── */}
           {store.step === "upload" && (
             <div className="space-y-6">
+
+              {/* Compte / Bank selector */}
+              {!parsing && (
+                <div className="rounded-xl border border-border bg-surface-elevated p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Building2 size={13} className="text-ink-ghost" />
+                    <p className="text-xs font-medium text-ink-soft">
+                      {comptes.length > 0 ? "Compte source" : "Votre banque"}
+                      <span className="text-ink-ghost font-normal"> (optionnel — améliore la catégorisation)</span>
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {comptes.length > 0
+                      ? comptes.map((c) => (
+                          <button
+                            key={c.id}
+                            onClick={() => setSelectedCompteId(selectedCompteId === c.id ? null : c.id)}
+                            className={cn(
+                              "text-xs px-2.5 py-1 rounded-full border transition-colors",
+                              selectedCompteId === c.id
+                                ? "border-accent bg-accent-soft text-accent font-medium"
+                                : "border-border text-ink-ghost hover:border-border-strong hover:text-ink"
+                            )}
+                          >
+                            {c.label}
+                          </button>
+                        ))
+                      : BANKS.map((b) => (
+                          <button
+                            key={b}
+                            onClick={() => setSelectedBank(selectedBank === b ? null : b)}
+                            className={cn(
+                              "text-xs px-2.5 py-1 rounded-full border transition-colors",
+                              selectedBank === b
+                                ? "border-accent bg-accent-soft text-accent font-medium"
+                                : "border-border text-ink-ghost hover:border-border-strong hover:text-ink"
+                            )}
+                          >
+                            {b}
+                          </button>
+                        ))
+                    }
+                  </div>
+                </div>
+              )}
+
               {parsing ? (
                 <div className="flex flex-col items-center justify-center gap-5 py-20">
                   <div className="relative">
@@ -222,12 +310,12 @@ export function ImportView() {
                     <Sparkles size={14} className="absolute -top-1 -right-1 text-accent" />
                   </div>
                   <div className="text-center space-y-1">
-                    <p className="text-sm font-medium text-ink">Lecture du PDF en cours…</p>
+                    <p className="text-sm font-medium text-ink">{parsingLabel}</p>
                     <p className="text-xs text-ink-ghost">L'IA extrait les transactions de votre relevé</p>
                   </div>
                 </div>
               ) : (
-                <DropZone onFile={handleFile} />
+                <DropZone onFiles={handleFiles} />
               )}
               {error && (
                 <p className="text-sm text-critique">{error}</p>
@@ -239,20 +327,57 @@ export function ImportView() {
                     <Clock size={10} />Historique d'imports
                   </p>
                   <div className="rounded-lg border border-border overflow-hidden">
-                    {importSessions.slice(0, 6).map((s) => (
-                      <div key={s.id} className="flex items-center justify-between px-4 py-3 border-b border-border last:border-b-0">
-                        <div>
-                          <p className="text-sm text-ink font-medium truncate max-w-[260px]">{s.fileName}</p>
-                          <p className="text-xs text-ink-ghost">
-                            {new Date(s.importedAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
-                          </p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-sm text-ink">{s.transactionCount} transactions</p>
-                          {s.reconciledCount > 0 && (
-                            <p className="text-xs text-calm">{s.reconciledCount} réconciliées</p>
-                          )}
-                        </div>
+                    {importSessions.slice(0, 10).map((s) => (
+                      <div key={s.id} className="border-b border-border last:border-b-0">
+                        {deletingSessionId === s.id ? (
+                          <div className="flex items-center gap-3 px-4 py-3 bg-critique/5">
+                            <AlertTriangle size={13} className="text-critique shrink-0" />
+                            <p className="text-xs text-ink flex-1">
+                              Supprimer <span className="font-medium">{s.transactionCount} transaction{s.transactionCount > 1 ? "s" : ""}</span> importées depuis «&nbsp;{s.fileName}&nbsp;» ?
+                            </p>
+                            <button
+                              onClick={() => { deleteImportSession(s.id); setDeletingSessionId(null); }}
+                              className="text-xs font-medium text-critique hover:underline shrink-0"
+                            >
+                              Confirmer
+                            </button>
+                            <button
+                              onClick={() => setDeletingSessionId(null)}
+                              className="text-xs text-ink-ghost hover:text-ink shrink-0"
+                            >
+                              Annuler
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between px-4 py-3 hover:bg-surface-overlay/40 transition-colors group">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm text-ink font-medium truncate max-w-[220px]">{s.fileName}</p>
+                                {s.bank && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-overlay border border-border text-ink-ghost shrink-0">{s.bank}</span>
+                                )}
+                              </div>
+                              <p className="text-xs text-ink-ghost">
+                                {new Date(s.importedAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <div className="text-right">
+                                <p className="text-sm text-ink">{s.transactionCount} transactions</p>
+                                {s.reconciledCount > 0 && (
+                                  <p className="text-xs text-calm">{s.reconciledCount} réconciliées</p>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => setDeletingSessionId(s.id)}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded hover:bg-critique/10 text-ink-ghost hover:text-critique"
+                                title="Supprimer cette importation"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -365,7 +490,7 @@ export function ImportView() {
                             onChange={(e) => handleCategorieChange(r, e.target.value)}
                             className="text-xs border border-border rounded px-1.5 py-0.5 bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-accent"
                           >
-                            {CATEGORY_GROUPS.map((g) => (
+                            {CATEGORY_OPTGROUPS.map((g) => (
                               <optgroup key={g.group} label={g.group}>
                                 {g.items.map((c) => <option key={c} value={c}>{c}</option>)}
                               </optgroup>
@@ -388,7 +513,7 @@ export function ImportView() {
                         <td className="px-3 py-2">
                           {r.matchedItemLabel && (
                             <button
-                              onClick={() => store.setReconciled(r.id, !r.reconciled)}
+                              onClick={() => handleToggleReconcile(r)}
                               className={cn(
                                 "flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded transition-colors max-w-[130px]",
                                 r.reconciled

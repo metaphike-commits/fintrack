@@ -15,6 +15,8 @@ export interface Compte {
   decouvertAutorise?: number;
   /** Montant actuellement utilisé dans le découvert (en €, positif = en débit) */
   decouvertUtilise?: number;
+  /** Jour du mois où le prélèvement est effectué (1–31) */
+  billingDay?: number;
 }
 
 interface ComptesState {
@@ -55,10 +57,18 @@ export const useComptesStore = create<ComptesState>()(
   )
 );
 
-/** Somme des soldes des comptes marqués `includedInRunway`. Null si aucun compte. */
+/**
+ * Somme des soldes des comptes marqués `includedInRunway`. Null si aucun compte.
+ *
+ * Les comptes de type "credit" sont toujours exclus, même si `includedInRunway`
+ * vaut true : leur solde (montant dû) est déjà réinjecté automatiquement dans
+ * la Base Financière comme dépense mensuelle à leur date de prélèvement
+ * (voir `syncFromComptes`). Les compter aussi ici les déduirait deux fois —
+ * une fois immédiatement dans le solde du jour, une fois à leur échéance.
+ */
 export function getSoldeRunway(comptes: Compte[]): number | null {
   if (comptes.length === 0) return null;
-  const included = comptes.filter((c) => c.includedInRunway);
+  const included = comptes.filter((c) => c.includedInRunway && c.type !== "credit");
   if (included.length === 0) return null;
   return included.reduce((s, c) => s + c.solde, 0);
 }

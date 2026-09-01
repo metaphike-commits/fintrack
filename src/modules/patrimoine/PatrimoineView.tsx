@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import {
   Plus, Trash2, TrendingUp, Target,
-  Building2, Wallet, Car, PiggyBank, Check, X,
+  Building2, Wallet, Car, PiggyBank, Check, X, CheckCircle, RotateCcw,
 } from "lucide-react";
 import {
   usePatrimoineStore,
@@ -11,6 +11,7 @@ import {
   type ActifType, type PassifType, type PassifStatut, type ObjectifType,
   type Actif, type Passif,
 } from "@/store/patrimoine";
+import { useComptesStore } from "@/store/comptes";
 import { useEngagementsStore } from "@/store/engagements";
 import { cn } from "@/lib/cn";
 
@@ -81,8 +82,8 @@ function ActifIcon({ type }: { type: ActifType }) {
 // ── Column templates ──────────────────────────────────────────────────────────
 // Actifs: Type | Libellé | Valeur act. | Valeur achat | Évol | Date acq. | Actions
 const ACTIF_COLS = "90px minmax(0,1fr) 110px 110px 76px 96px 48px";
-// Passifs: Type | Organisme | Statut | Capital | Init. | Mensualité | Octroi | Durée | Restant | Fin théo. | Actions
-const PASSIF_COLS = "88px minmax(0,1fr) 118px 100px 100px 90px 90px 54px 68px 96px 48px";
+// Passifs: Type | Organisme | Statut | Capital | Init. | Mensualité | Prélèv. | Octroi | Durée | Restant | Fin théo. | Actions
+const PASSIF_COLS = "88px minmax(0,1fr) 118px 100px 100px 90px 52px 90px 54px 68px 96px 48px";
 
 // ── Net Worth Hero ────────────────────────────────────────────────────────────
 function NetWorthHero({ totalActifs, totalPassifs }: { totalActifs: number; totalPassifs: number }) {
@@ -238,38 +239,48 @@ function ActifRow({
 
 // ── Passif row ────────────────────────────────────────────────────────────────
 function PassifRow({
-  p, isEditing, onEdit, onSave, onCancel, onDelete,
+  p, isEditing, isPaying, creditComptes, onEdit, onSave, onCancel, onDelete, onStartPay, onConfirmPay, onCancelPay,
 }: {
-  p: Passif; isEditing: boolean;
+  p: Passif; isEditing: boolean; isPaying: boolean;
+  creditComptes: { id: string; label: string }[];
   onEdit: () => void; onSave: (patch: Partial<Omit<Passif, "id">>) => void;
   onCancel: () => void; onDelete: () => void;
+  onStartPay: () => void; onConfirmPay: (date: string) => void; onCancelPay: () => void;
 }) {
-  const [label, setLabel]       = useState(p.label);
-  const [type, setType]         = useState<PassifType>(p.type);
-  const [statut, setStatut]     = useState<PassifStatut>(p.statut ?? "actif");
-  const [capital, setCapital]   = useState(String(p.capital));
-  const [init, setInit]         = useState(p.montantInitial != null ? String(p.montantInitial) : "");
-  const [mens, setMens]         = useState(p.mensualite != null ? String(p.mensualite) : "");
-  const [octroi, setOctroi]     = useState(p.dateOctroi ?? "");
-  const [duree, setDuree]       = useState(p.dureeMois != null ? String(p.dureeMois) : "");
+  const [payDate, setPayDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [label, setLabel]         = useState(p.label);
+  const [type, setType]           = useState<PassifType>(p.type);
+  const [statut, setStatut]       = useState<PassifStatut>(p.statut ?? "actif");
+  const [capital, setCapital]     = useState(String(p.capital));
+  const [init, setInit]           = useState(p.montantInitial != null ? String(p.montantInitial) : "");
+  const [mens, setMens]           = useState(p.mensualite != null ? String(p.mensualite) : "");
+  const [billingDay, setBillingDay] = useState(p.billingDay != null ? String(p.billingDay) : "");
+  const [octroi, setOctroi]       = useState(p.dateOctroi ?? "");
+  const [duree, setDuree]         = useState(p.dureeMois != null ? String(p.dureeMois) : "");
+  const [compteId, setCompteId]   = useState(p.compteId ?? "");
   useEffect(() => {
     setLabel(p.label); setType(p.type); setStatut(p.statut ?? "actif");
     setCapital(String(p.capital)); setInit(p.montantInitial != null ? String(p.montantInitial) : "");
     setMens(p.mensualite != null ? String(p.mensualite) : "");
+    setBillingDay(p.billingDay != null ? String(p.billingDay) : "");
     setOctroi(p.dateOctroi ?? ""); setDuree(p.dureeMois != null ? String(p.dureeMois) : "");
+    setCompteId(p.compteId ?? "");
   }, [p]);
 
   function handleSave() {
     const c = parseFloat(capital);
     if (!label.trim() || isNaN(c)) return;
     const mi = parseFloat(init); const m = parseFloat(mens); const d = parseInt(duree, 10);
+    const bd = parseInt(billingDay, 10);
     onSave({
       label: label.trim(), type, statut,
       capital: c,
       montantInitial: isNaN(mi) ? undefined : mi,
       mensualite:     isNaN(m)  ? undefined : m,
+      billingDay:     isNaN(bd) ? undefined : Math.min(31, Math.max(1, bd)),
       dateOctroi:     octroi || undefined,
       dureeMois:      isNaN(d)  ? undefined : d,
+      compteId:       compteId || undefined,
     });
   }
 
@@ -304,7 +315,22 @@ function PassifRow({
         {/* Montant initial */}
         <span className="tabular-nums text-ink-ghost text-right">{p.montantInitial != null ? fmt(p.montantInitial) : "—"}</span>
         {/* Mensualité */}
-        <span className="tabular-nums text-attention text-right">{p.mensualite != null ? fmt(p.mensualite) : "—"}</span>
+        <span className="tabular-nums text-right">
+          {p.mensualite != null && p.mensualite > 0
+            ? <span className="text-attention">{fmt(p.mensualite)}</span>
+            : (p.statut === "actif" || !p.statut)
+              ? <span className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                  style={{ color: "var(--critique)", background: "var(--critique-soft)" }}
+                  title="Mensualité manquante — ce passif n'est pas inclus dans la Base Financière">
+                  ⚠ manquant
+                </span>
+              : <span className="text-ink-ghost">—</span>
+          }
+        </span>
+        {/* Jour de prélèvement */}
+        <span className="tabular-nums text-ink-ghost text-center">
+          {p.billingDay != null ? `j.${p.billingDay}` : "—"}
+        </span>
         {/* Date d'octroi */}
         <span className="tabular-nums text-ink-ghost">{fmtDate(p.dateOctroi)}</span>
         {/* Durée */}
@@ -314,10 +340,32 @@ function PassifRow({
         {/* Fin théorique */}
         <span className="tabular-nums text-ink-ghost">{fin}</span>
         {/* Actions */}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 text-ink-ghost hover:text-critique transition-colors"><Trash2 size={11} /></button>
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={(e) => { e.stopPropagation(); onStartPay(); }}
+            className="p-1 text-ink-ghost hover:text-calm transition-colors" title="Marquer comme payé">
+            <CheckCircle size={11} />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="p-1 text-ink-ghost hover:text-critique transition-colors" title="Supprimer">
+            <Trash2 size={11} />
+          </button>
         </div>
       </div>
+
+      {isPaying && (
+        <div className="px-4 py-3 flex items-end gap-3" style={{ borderBottom: GB, background: "rgba(0,0,0,0.15)" }}>
+          <div>
+            <p className="text-[9px] font-mono uppercase tracking-wide text-ink-ghost mb-0.5">Date de paiement</p>
+            <input className={iCls} style={{ ...iStyle, width: 148 }} type="date"
+              value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+          </div>
+          <button onClick={onCancelPay} className="text-xs text-ink-ghost hover:text-ink px-2 py-1.5">Annuler</button>
+          <button onClick={() => onConfirmPay(payDate)}
+            className="text-xs text-calm hover:text-calm/80 px-2 py-1.5 flex items-center gap-1">
+            <Check size={11} />Confirmer payé
+          </button>
+        </div>
+      )}
 
       {isEditing && (
         <div className="px-4 py-3" style={{ borderBottom: GB, background: "rgba(0,0,0,0.15)" }}>
@@ -344,12 +392,24 @@ function PassifRow({
             <LabeledField label="Mensualité €">
               <input className={iCls} style={iStyle} type="number" value={mens} onChange={(e) => setMens(e.target.value)} />
             </LabeledField>
+            <LabeledField label="Jour prélèvement">
+              <input className={iCls} style={iStyle} type="number" min="1" max="31" placeholder="1–31"
+                value={billingDay} onChange={(e) => setBillingDay(e.target.value)} />
+            </LabeledField>
             <LabeledField label="Date d'octroi">
               <input className={iCls} style={iStyle} type="date" value={octroi} onChange={(e) => setOctroi(e.target.value)} />
             </LabeledField>
             <LabeledField label="Durée (mois)">
               <input className={iCls} style={iStyle} type="number" value={duree} onChange={(e) => setDuree(e.target.value)} />
             </LabeledField>
+            {creditComptes.length > 0 && (
+              <LabeledField label="Compte crédit lié">
+                <select className={iCls} style={iStyle} value={compteId} onChange={(e) => setCompteId(e.target.value)}>
+                  <option value="">— Aucun —</option>
+                  {creditComptes.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
+              </LabeledField>
+            )}
           </div>
           <div className="flex justify-end gap-2">
             <button onClick={onCancel} className="text-xs text-ink-ghost hover:text-ink transition-colors px-2 py-1">Annuler</button>
@@ -399,19 +459,22 @@ function AddActifForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function AddPassifForm({ onDone }: { onDone: () => void }) {
+function AddPassifForm({ onDone, creditComptes }: { onDone: () => void; creditComptes: { id: string; label: string }[] }) {
   const { addPassif } = usePatrimoineStore();
-  const [label, setLabel]   = useState(""); const [type, setType]   = useState<PassifType>("crédit conso");
-  const [statut, setStatut] = useState<PassifStatut>("actif");
-  const [capital, setCapital] = useState(""); const [init, setInit]   = useState("");
-  const [mens, setMens]     = useState(""); const [octroi, setOctroi] = useState("");
-  const [duree, setDuree]   = useState("");
+  const [label, setLabel]       = useState(""); const [type, setType]   = useState<PassifType>("crédit conso");
+  const [statut, setStatut]     = useState<PassifStatut>("actif");
+  const [capital, setCapital]   = useState(""); const [init, setInit]   = useState("");
+  const [mens, setMens]         = useState(""); const [billingDay, setBillingDay] = useState("");
+  const [octroi, setOctroi]     = useState("");
+  const [duree, setDuree]       = useState("");
+  const [compteId, setCompteId] = useState("");
 
   function submit() {
     const c = parseFloat(capital); if (!label.trim() || isNaN(c)) return;
     const mi = parseFloat(init); const m = parseFloat(mens); const d = parseInt(duree, 10);
-    addPassif({ label: label.trim(), type, statut, capital: c, montantInitial: isNaN(mi) ? undefined : mi, mensualite: isNaN(m) ? undefined : m, dateOctroi: octroi || undefined, dureeMois: isNaN(d) ? undefined : d });
-    setLabel(""); setCapital(""); setInit(""); setMens(""); setOctroi(""); setDuree(""); onDone();
+    const bd = parseInt(billingDay, 10);
+    addPassif({ label: label.trim(), type, statut, capital: c, montantInitial: isNaN(mi) ? undefined : mi, mensualite: isNaN(m) ? undefined : m, billingDay: isNaN(bd) ? undefined : Math.min(31, Math.max(1, bd)), dateOctroi: octroi || undefined, dureeMois: isNaN(d) ? undefined : d, compteId: compteId || undefined });
+    setLabel(""); setCapital(""); setInit(""); setMens(""); setBillingDay(""); setOctroi(""); setDuree(""); setCompteId(""); onDone();
   }
 
   return (
@@ -431,8 +494,17 @@ function AddPassifForm({ onDone }: { onDone: () => void }) {
         <LabeledField label="Capital restant €"><input className={iCls} style={iStyle} type="number" value={capital} onChange={(e) => setCapital(e.target.value)} placeholder="0" /></LabeledField>
         <LabeledField label="Montant initial €"><input className={iCls} style={iStyle} type="number" value={init} onChange={(e) => setInit(e.target.value)} placeholder="0" /></LabeledField>
         <LabeledField label="Mensualité €"><input className={iCls} style={iStyle} type="number" value={mens} onChange={(e) => setMens(e.target.value)} placeholder="0" /></LabeledField>
+        <LabeledField label="Jour prélèvement"><input className={iCls} style={iStyle} type="number" min="1" max="31" value={billingDay} onChange={(e) => setBillingDay(e.target.value)} placeholder="1–31" /></LabeledField>
         <LabeledField label="Date d'octroi"><input className={iCls} style={iStyle} type="date" value={octroi} onChange={(e) => setOctroi(e.target.value)} /></LabeledField>
         <LabeledField label="Durée (mois)"><input className={iCls} style={iStyle} type="number" value={duree} onChange={(e) => setDuree(e.target.value)} placeholder="24" /></LabeledField>
+        {creditComptes.length > 0 && (
+          <LabeledField label="Compte crédit lié">
+            <select className={iCls} style={iStyle} value={compteId} onChange={(e) => setCompteId(e.target.value)}>
+              <option value="">— Aucun —</option>
+              {creditComptes.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+          </LabeledField>
+        )}
       </div>
       <div className="flex justify-end gap-2">
         <button onClick={onDone} className="text-xs text-ink-ghost hover:text-ink px-2 py-1 flex items-center gap-1"><X size={11} />Annuler</button>
@@ -496,21 +568,28 @@ function TableHead({ cols, template }: { cols: string[]; template: string }) {
 export function PatrimoineView() {
   const { actifs, passifs, objectifs, deleteActif, updateActif, deletePassif, updatePassif, deleteObjectif, updateObjectif, seedFromEngagements } = usePatrimoineStore();
   const { engagements } = useEngagementsStore();
+  const comptes       = useComptesStore((s) => s.comptes);
+  const creditComptes = useMemo(() => comptes.filter((c) => c.type === "credit"), [comptes]);
 
   const [showAddActif,    setShowAddActif]    = useState(false);
   const [showAddPassif,   setShowAddPassif]   = useState(false);
   const [showAddObjectif, setShowAddObjectif] = useState(false);
   const [editingActifId,  setEditingActifId]  = useState<string | null>(null);
   const [editingPassifId, setEditingPassifId] = useState<string | null>(null);
+  const [payingPassifId,  setPayingPassifId]  = useState<string | null>(null);
+  const [showRembourses,  setShowRembourses]  = useState(false);
 
   // Seed on first mount once store is hydrated (dep on count handles async hydration)
   useEffect(() => {
     if (engagements.length > 0) seedFromEngagements(engagements);
   }, [engagements.length]);
 
+  const activePassifs    = useMemo(() => passifs.filter((p) => p.statut !== "rembourse"), [passifs]);
+  const remboursesPassifs = useMemo(() => passifs.filter((p) => p.statut === "rembourse"), [passifs]);
+
   const totalActifs      = useMemo(() => actifs.reduce((s, a) => s + a.valeur, 0), [actifs]);
-  const totalPassifs     = useMemo(() => passifs.reduce((s, p) => s + p.capital, 0), [passifs]);
-  const totalMensualites = useMemo(() => passifs.reduce((s, p) => s + (p.mensualite ?? 0), 0), [passifs]);
+  const totalPassifs     = useMemo(() => activePassifs.reduce((s, p) => s + p.capital, 0), [activePassifs]);
+  const totalMensualites = useMemo(() => activePassifs.reduce((s, p) => s + (p.mensualite ?? 0), 0), [activePassifs]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -575,25 +654,97 @@ export function PatrimoineView() {
         >
           <TableHead
             template={PASSIF_COLS}
-            cols={["Type de dette", "Organisme", "Statut", "Capital restant", "Montant initial", "Mensualité", "Date d'octroi", "Durée", "Restant", "Fin théorique", ""]}
+            cols={["Type de dette", "Organisme", "Statut", "Capital restant", "Montant initial", "Mensualité", "Prélèv.", "Date d'octroi", "Durée", "Restant", "Fin théorique", ""]}
           />
-          {passifs.length === 0 && !showAddPassif && (
+          {activePassifs.length === 0 && !showAddPassif && (
             <div className="px-4 py-5 text-center text-xs text-ink-ghost">
-              Aucun passif.{" "}
+              Aucun passif actif.{" "}
               <button onClick={() => setShowAddPassif(true)} className="text-accent hover:underline">Ajouter</button>
             </div>
           )}
-          {passifs.map((p) => (
+          {activePassifs.map((p) => (
             <PassifRow key={p.id} p={p}
               isEditing={editingPassifId === p.id}
-              onEdit={() => setEditingPassifId(p.id)}
+              isPaying={payingPassifId === p.id}
+              creditComptes={creditComptes}
+              onEdit={() => { setEditingPassifId(p.id); setPayingPassifId(null); }}
               onSave={(patch) => { updatePassif(p.id, patch); setEditingPassifId(null); }}
               onCancel={() => setEditingPassifId(null)}
               onDelete={() => deletePassif(p.id)}
+              onStartPay={() => { setPayingPassifId(p.id); setEditingPassifId(null); }}
+              onConfirmPay={(date) => {
+                updatePassif(p.id, { statut: "rembourse", datePaiement: date });
+                setPayingPassifId(null);
+              }}
+              onCancelPay={() => setPayingPassifId(null)}
             />
           ))}
-          {showAddPassif && <AddPassifForm onDone={() => setShowAddPassif(false)} />}
+          {showAddPassif && <AddPassifForm onDone={() => setShowAddPassif(false)} creditComptes={creditComptes} />}
         </TableSection>
+
+        {/* ── Remboursés / Payés ─────────────────────────────────────────── */}
+        {remboursesPassifs.length > 0 && (
+          <div className="rounded-xl overflow-hidden" style={{ border: GBF, background: "rgba(255,255,255,0.01)" }}>
+            <button
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/[0.02] transition-colors"
+              style={{ borderBottom: showRembourses ? GB : "none" }}
+              onClick={() => setShowRembourses((v) => !v)}
+            >
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] font-mono uppercase tracking-widest text-ink-ghost">Remboursés / Payés</p>
+                <span className="text-[10px] font-bold tabular-nums text-calm">{remboursesPassifs.length}</span>
+              </div>
+              <span className="text-[10px] text-ink-ghost">{showRembourses ? "▲" : "▼"}</span>
+            </button>
+            {showRembourses && (
+              <>
+                <TableHead
+                  template={PASSIF_COLS}
+                  cols={["Type de dette", "Organisme", "Payé le", "Capital initial", "—", "—", "—", "—", "—", "—", "—", ""]}
+                />
+                {remboursesPassifs.map((p) => {
+                  const statutInfo = PASSIF_STATUT_COLOR["rembourse"];
+                  return (
+                    <div
+                      key={p.id}
+                      className="grid items-center gap-3 px-4 py-2.5 group hover:bg-white/[0.02] transition-colors text-xs"
+                      style={{ gridTemplateColumns: PASSIF_COLS, borderBottom: GB }}
+                    >
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded text-center truncate"
+                        style={{ background: "rgba(255,255,255,0.04)", color: "var(--ink-ghost)" }}>
+                        {PASSIF_TYPE_LABELS[p.type]}
+                      </span>
+                      <span className="text-ink-ghost font-medium truncate line-through">{p.label}</span>
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded truncate"
+                        style={{ color: statutInfo.text, background: statutInfo.bg }}>
+                        {p.datePaiement ? fmtDate(p.datePaiement) : "Remboursé"}
+                      </span>
+                      <span className="tabular-nums text-ink-ghost text-right">{p.montantInitial != null ? fmt(p.montantInitial) : fmt(p.capital)}</span>
+                      <span className="text-ink-ghost">—</span>
+                      <span className="text-ink-ghost">—</span>
+                      <span className="text-ink-ghost">—</span>
+                      <span className="text-ink-ghost">—</span>
+                      <span className="text-ink-ghost">—</span>
+                      <span className="text-ink-ghost">—</span>
+                      <span className="text-ink-ghost">—</span>
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => updatePassif(p.id, { statut: "actif", datePaiement: undefined })}
+                          className="p-1 text-ink-ghost hover:text-accent transition-colors" title="Réactiver">
+                          <RotateCcw size={11} />
+                        </button>
+                        <button onClick={() => deletePassif(p.id)}
+                          className="p-1 text-ink-ghost hover:text-critique transition-colors" title="Supprimer">
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        )}
 
         {/* ── Objectifs ───────────────────────────────────────────────────── */}
         <div>

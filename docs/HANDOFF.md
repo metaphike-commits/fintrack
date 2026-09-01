@@ -18,15 +18,43 @@ Ne pas ouvrir de PR ni pousser de commits V5 dessus.
 
 ---
 
-## Current State — V6 COMPLÈTE · 2026-05-15
+## ⚠️ Ce fichier était périmé — lu et corrigé le 2026-08-05
+
+Ce HANDOFF pointait vers un repo GitHub (`fintrack-v4`) et décrivait un état
+"V4.1–V6.6" daté du 23/05. En pratique, ce dossier local (`financial-trajectory-simulator-v3`,
+branche `master`, **aucun remote configuré**) a continué à évoluer séparément
+depuis — Budget, Review, Themes (5 thèmes), FinanceSyncProvider, et tout le
+travail décrit ci-dessous n'existaient dans aucune doc avant aujourd'hui.
+Cette section documente donc l'état réel de **ce dossier**, pas de `fintrack-v4`
+(que je n'ai pas les moyens de vérifier). Décision de repo/remote non tranchée
+ici — à valider humainement si ça compte encore.
+
+## Current State — Sprint fiabilisation · 2026-08-05
 
 ### Sprint actif
 
-**QA terrain / V7 à définir** — toute la roadmap V6 est livrée.
+**Sprint fiabilisation pré-feature-IA** (priorités définies par audit, puis
+audit indépendant recalibré sur le code réel plutôt que sur des suppositions
+génériques). Terminé.
 
 ### Etat
 
-**V6.1–V6.6 livrées et buildables. `npx tsc --noEmit` = 0 erreur au 2026-05-15.**
+`npm run lint` = 0 erreur (22 warnings connus, voir ADR-011) · `npx tsc --noEmit` = 0 erreur (à froid, sans build préalable) · `npm run build` = OK · `npm run test` = 45/45 (Vitest, nouveau).
+
+### Livré (2026-08-05)
+
+- **Import Settings sécurisé** — restaurer une sauvegarde JSON exigeait juste de choisir un fichier ; ça écrasait tout instantanément. Ajout d'une étape de confirmation explicite + bouton "sauvegarder l'état actuel d'abord" (`SettingsView.tsx`, même pattern que `confirmReset`). Validation minimale de forme (au moins une clé Fintrack reconnue) avant écriture.
+- **Validation zod sur les 4 routes IA** — `categorize`, `insight`, `pdf-parse`, `scenario-parse` ne faisaient que `JSON.parse` + cast TypeScript (aucune garantie runtime). Nouveau `src/lib/ai/schemas.ts`, erreurs de format distinguées des erreurs réseau/API. `categorize` rejette maintenant les catégories que l'IA invente (hors taxonomie `CATEGORIES_FLAT`).
+- **Runway harmonisé** — nouveau hook `useSoldeEffectif()` (`src/hooks/useSoldeEffectif.ts`), utilisé par Cockpit/Focus/Scenarios/Timeline/Budget au lieu que chacun refasse `getSoldeRunway(comptes) ?? soldeCourant` séparément. **Volontairement pas unifié plus loin** : Cockpit/Timeline/Budget déduisent `pendingOverdue` et incluent les engagements (vues "réelles") ; Focus/Scénarios ne le font pas (vues exploratoires, badge "Simulation" déjà visible — décision actée au sprint du 23/05, pas un bug).
+- **ESLint installé** — inexistant avant (ni script, ni config, ni dépendance). `eslint-config-next` pinné en `^15` (aligné sur `next@15.5.18`). `react/no-unescaped-entities` désactivée (UI 100% française, apostrophes partout) — voir ADR-011.
+- **Vitest installé** — 0 test avant. 45 tests ciblés sur `lib/runway.ts`, `lib/projection.ts`, `lib/timeline.ts`, `lib/budget.ts`, dont plusieurs régressions explicites (dérivation `billingDay` depuis `dateDebut`, dépassement de budget qui continue à peser sur la projection au lieu d'être ignoré). Voir ADR-012.
+- **Corrections découvertes en cours de session, hors sprint mais déjà commises dans le code** (avant ce sprint fiabilisation, même session) : bug `billingDay` mensuel non dérivé de `dateDebut` (`lib/dateUtils.ts` `resolveBillingDay`), double comptage des comptes crédit dans `getSoldeRunway`, mélange visuel zone négative/seuil de confort dans la courbe Timeline, dépenses variables (enveloppes Budget) désormais liées à la Timeline via une courbe indépendante (n'altère jamais les vrais calculs).
+
+### Non fait / repoussé volontairement
+
+- Les 22 warnings ESLint restants (`react-hooks/exhaustive-deps`, imports inutilisés) — plusieurs touchent des `useMemo` avec `now = new Date()` où ajouter la dépendance changerait le comportement ; nécessite une revue au cas par cas, pas un fix mécanique.
+- Commit du travail en attente (~45 fichiers modifiés/nouveaux sur `master`, jamais commités) — signalé, pas résolu : décision de découpage en branches/PR à valider humainement (AGENTS.md exige branche-par-tâche).
+- Mise à jour de `docs/PROJECT_BRIEF.md`/`docs/TASKS.md` avec le roadmap réel de ce dossier vs celui de `fintrack-v4` — non tranché, nécessite de clarifier d'abord quel repo est réellement actif.
 
 ---
 
@@ -141,25 +169,34 @@ src/components/ui/AppSidebar/AppSidebarFooter.tsx     Footer partagé
 ## Checks techniques
 
 ```bash
-npx tsc --noEmit    # ✅ 0 erreur au 2026-05-15 (après V6.6)
-npm run build       # non relancé depuis V5.3
+npm run lint        # ✅ 0 erreur, 22 warnings connus (2026-08-05)
+npx tsc --noEmit    # ✅ 0 erreur, testé à froid sans .next (2026-08-05)
+npm run build       # ✅ OK (2026-08-05) — ⚠️ toujours arrêter le serveur dev
+                     #    avant : next dev --turbopack et next build en
+                     #    concurrence sur le même .next/ corrompent le build
+                     #    (MODULE_NOT_FOUND turbopack_runtime) — pas un bug
+                     #    de code, vécu pendant ce sprint.
+npm run test        # ✅ 45/45 (Vitest, nouveau)
 ```
-
-**Note** : si `.next` est absent, lancer `npm run build` avant `npx tsc --noEmit`
-pour régénérer les types Next.
 
 ---
 
 ## Prompt de reprise pour un autre agent
 
 ```
-Tu reprends Fintrack. Repo de travail : https://github.com/metaphike-commits/fintrack-v4
+Tu reprends Fintrack (financial-trajectory-simulator-v3, local, pas de remote git).
 
-Lis HANDOFF.md, TASKS.md en priorité.
+⚠️ Ce dossier n'est PAS synchronisé avec https://github.com/metaphike-commits/fintrack-v4
+mentionné plus haut dans ce fichier — vérifie avec l'humain lequel des deux est
+réellement le repo actif avant de supposer quoi que ce soit sur la roadmap V4-V6.
 
-V4.1–V6.6 sont livrées et buildables. Roadmap V6 terminée.
-V6 a ajouté : fts-engagements, fts-coups-durs, onboarding 7 checkpoints, score fragilité,
-ProchainVirement, BudgetVsReel, burn rate glissant, transferts neutres P&L, reporté→arriéré auto.
+Lis HANDOFF.md (section "Sprint fiabilisation · 2026-08-05" en premier — le
+reste du fichier est un ancien état daté du 23/05, gardé pour référence),
+TASKS.md, DECISIONS.md (ADR-011 ESLint, ADR-012 Vitest, les plus récents).
+
+Sprint fiabilisation terminé : ESLint + Vitest installés, import Settings
+sécurisé (confirmation avant restauration JSON), validation zod sur les 4
+routes IA, runway harmonisé via useSoldeEffectif(). 45 tests passent.
 
 L'app est un Next.js 15 App Router avec Zustand persist, SVG hand-drawn charts,
 pas de librairie UI tierce, pas de ORM, tout en localStorage.
@@ -167,10 +204,11 @@ pas de librairie UI tierce, pas de ORM, tout en localStorage.
 Avant de coder :
 1. résume l'état actuel en 5 lignes
 2. identifie quel fichier/store tu vas toucher
-3. vérifie que npx tsc --noEmit passe avant et après ta modification
-4. ne touche jamais les persist keys Zustand sans validation humaine
+3. vérifie npm run lint + npx tsc --noEmit + npm run test avant et après ta modification
+4. si tu dois lancer npm run build, arrête d'abord tout `next dev` en cours (même .next/, conflit)
+5. ne touche jamais les persist keys Zustand sans validation humaine
 ```
 
 ---
 
-_Dernière mise à jour : 2026-05-15 · Roadmap V6 complète (V6.1–V6.6) · Prochain : QA terrain ou V7_
+_Dernière mise à jour : 2026-08-05 · Sprint fiabilisation livré (lint/tests/zod/runway/import) · Prochain : décider du repo de référence (ce dossier vs fintrack-v4) puis, si validé, commit du travail en attente en branches/PR_

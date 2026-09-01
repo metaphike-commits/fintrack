@@ -39,27 +39,30 @@ patrimoine (actifs/passifs/objectifs), cockpit stratégique, et command palette 
 
 ---
 
-## Active Sprint — V6.5 : Budget vs Réel
+## Dernier sprint livré — Consolidation calculs (2026-05-23)
 
 ### Objectif
 
-Comparatif mensuel dépenses prévues (base financière) vs transactions réelles importées,
-par catégorie. Dérive colorée, alerte automatique sur dépassement.
+Sprint de consolidation : bugs critiques de calcul corrigés, incohérences systémiques entre modules résolues.
 
-### Tâches
+### Livré
 
-- [ ] Calculer `prévu` par catégorie depuis `fts-base-financiere` (toMensuel par catégorie)
-- [ ] Calculer `réel` par catégorie depuis `fts-transactions` (mois courant)
-- [ ] Vue comparatif : tableau catégories / prévu / réel / dérive % + montant (vert/orange/rouge)
-- [ ] Alerte automatique quand dérive > 20% sur une catégorie
-- [ ] Intégrer dans AnalyseView (nouvel onglet) ou vue dédiée `/budget`
-- [ ] `npx tsc --noEmit` = 0 erreur
-
-### Critères de done
-
-- Comparatif visible avec au moins une transaction importée
-- Dérive colorée (vert < 0%, orange 0–20%, rouge > 20%)
-- Alertes générées automatiquement sans interaction
+- [x] **C1** `getPendingOverdueAmount` : `<= todayDay` → `< todayDay` (double déduction supprimée)
+- [x] **C2** Cockpit : projections 90j passent maintenant `statuts, paid`
+- [x] **C3** `computeEnveloppeMetrics` : filtre `excludedFromAnalytics` ajouté
+- [x] **C4** `BudgetView.soldeEntrant` : retourne `soldeEffectif - pendingOverdue` quand reviewDate ≤ today
+- [x] **C5** Budget + Revue : `{}, {}` → `statuts, paid` dans tous les appels `projectDailyBalance`
+- [x] **I1** Timeline runway : utilise `calculateRunway` net + engagements (cohérent avec Cockpit)
+- [x] **I2** `computeBaseNet` date-aware : filtre `dateDebut`/`dateFin` selon `refDate`
+- [x] **I3** Cockpit `accountRisks` : `toMensuel(item)` → `item.montant`
+- [x] **I4** `getMensualitesEngagements` date-aware : filtre `dateDebut`/`dateEcheance`
+- [x] **I5** `parseLocalDate` helper central pour parsing ISO date en local (évite bug timezone UTC)
+- [x] `FinanceSyncProvider` déplacé dans `app/layout.tsx` (couvre `/focus` et toutes les routes)
+- [x] `AnalyseView` recos : `transactions` → `analyticsTxs` (respecte les filtres période)
+- [x] `linkedTransactionId` patchable via `updateTransaction`; `dismissTransferPair` le réinitialise
+- [x] Focus + Scénarios : badge "Simulation" + `computeBaseNet(active, new Date())` explicite
+- [x] `generateMonthlyReview` : runway intègre mensualités engagements (`getMensualitesEngagements`)
+- [x] `npx tsc --noEmit` = 0 erreur · `npm run build` = OK
 
 ---
 
@@ -112,4 +115,4 @@ par catégorie. Dérive colorée, alerte automatique sur dépassement.
 
 ---
 
-_Dernière mise à jour : 2026-05-15 · Roadmap V6 complète · Prochain : V7 ou QA terrain_
+_Dernière mise à jour : 2026-05-23 · Sprint consolidation calculs livré · Prochain : tests unitaires (projection, timeline, budget, detectTransfers) + refactor hooks progressif_

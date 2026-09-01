@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles, ChevronRight } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { Skeleton } from "@/components/ui/Skeleton";
 
 interface SignalIAProps {
@@ -92,13 +92,6 @@ export function SignalIA({
           </p>
         )}
       </div>
-
-      {insight && (
-        <button className="shrink-0 flex items-center gap-0.5 text-[11px] text-white/60 hover:text-white/90 transition-colors mt-1">
-          Voir pourquoi
-          <ChevronRight size={11} />
-        </button>
-      )}
 
       {/* Seuil de confort indicator */}
       {pointBas !== null && pointBas !== undefined && pointBas < confortThreshold && (

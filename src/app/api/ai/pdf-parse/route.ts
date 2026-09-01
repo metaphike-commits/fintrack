@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { pdfParseResponseSchema } from "@/lib/ai/schemas";
 
 export const runtime = "nodejs";
 
@@ -16,22 +17,27 @@ Règles :
 - Ignore les lignes de solde, totaux, en-têtes, pieds de page
 - Convertis les dates JJ/MM/AAAA ou JJ/MM/AA en YYYY-MM-DD`;
 
-function parseRows(content: string) {
-  const raw = JSON.parse(content ?? "{}");
-  return (raw.rows ?? [])
-    .map((r: { date?: string; label?: string; montant?: unknown; direction?: string }) => ({
-      id: crypto.randomUUID(),
-      date: r.date ?? new Date().toISOString().split("T")[0],
-      label: (r.label ?? "Transaction").trim().slice(0, 80),
-      montant: Math.abs(Number(r.montant) || 0),
-      direction: r.direction === "revenu" ? "revenu" : "depense",
-    }))
-    .filter((r: { montant: number }) => r.montant > 0);
+/** Throws a descriptive error on malformed JSON or an unexpected shape —
+ *  the caller distinguishes this from network/API errors. */
+function parseRows(content: string): { id: string; date: string; label: string; montant: number; direction: "revenu" | "depense" }[] {
+  let json: unknown;
+  try {
+    json = JSON.parse(content ?? "{}");
+  } catch {
+    throw new Error("FORMAT: JSON invalide dans la réponse IA.");
+  }
+
+  const result = pdfParseResponseSchema.safeParse(json);
+  if (!result.success) {
+    throw new Error("FORMAT: structure inattendue dans la réponse IA.");
+  }
+
+  return result.data.rows.map((r) => ({ id: crypto.randomUUID(), ...r }));
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { text, images }: { text?: string; images?: string[] } = await req.json();
+    const { text, images, mimeType }: { text?: string; images?: string[]; mimeType?: string } = await req.json();
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return NextResponse.json({ error: "OPENAI_API_KEY manquante." }, { status: 503 });
@@ -41,7 +47,7 @@ export async function POST(req: NextRequest) {
     let completion;
 
     if (images?.length) {
-      // Scanned PDF — use Vision API
+      const imgMime = mimeType ?? "image/jpeg";
       completion = await client.chat.completions.create({
         model: "gpt-4o",
         temperature: 0.1,
@@ -54,7 +60,7 @@ export async function POST(req: NextRequest) {
               { type: "text", text: "Extrais toutes les transactions de ce relevé bancaire :" },
               ...images.map((img) => ({
                 type: "image_url" as const,
-                image_url: { url: `data:image/jpeg;base64,${img}`, detail: "high" as const },
+                image_url: { url: `data:${imgMime};base64,${img}`, detail: "high" as const },
               })),
             ],
           },
@@ -79,6 +85,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ rows });
   } catch (err) {
     console.error("[pdf-parse]", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.startsWith("FORMAT:")) {
+      return NextResponse.json({ error: "Réponse IA invalide — réessayez ou vérifiez le fichier." }, { status: 422 });
+    }
+    return NextResponse.json({ error: "Erreur réseau ou API OpenAI." }, { status: 500 });
   }
 }

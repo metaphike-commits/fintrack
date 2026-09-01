@@ -31,6 +31,10 @@ export interface Passif {
   /** Durée totale en mois */
   dureeMois?: number;
   tauxInteret?: number;
+  billingDay?: number;
+  datePaiement?: string;
+  /** Explicit link to a credit Compte — prevents fragile label-based exclusion in sync */
+  compteId?: string;
   notes?: string;
 }
 

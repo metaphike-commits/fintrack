@@ -1,22 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { CATEGORIES_FLAT } from "@/lib/categories";
+import { categorizeResponseSchema } from "@/lib/ai/schemas";
 
 export const runtime = "nodejs";
-
-const CATEGORIES = [
-  // Revenus
-  "salaire", "freelance", "remboursement", "allocation",
-  // Logement
-  "loyer", "électricité", "eau", "internet",
-  // Transport
-  "transport", "stationnement", "carburant",
-  // Vie courante
-  "alimentation", "restauration", "santé", "loisirs", "vêtements",
-  // Financier
-  "abonnements", "assurance", "épargne", "crédit", "impôts", "amende",
-  // Autre
-  "autre",
-];
 
 interface InputRow {
   id: string;
@@ -26,7 +13,7 @@ interface InputRow {
 }
 
 export async function POST(req: NextRequest) {
-  const { rows }: { rows: InputRow[] } = await req.json();
+  const { rows, bank }: { rows: InputRow[]; bank?: string } = await req.json();
 
   if (!rows?.length) {
     return NextResponse.json({ rows: [] });
@@ -47,8 +34,10 @@ export async function POST(req: NextRequest) {
     .map((r) => `${r.id}|${r.direction}|${r.montant}|${r.label}`)
     .join("\n");
 
-  const prompt = `Catégorise ces transactions bancaires françaises.
-Catégories disponibles : ${CATEGORIES.join(", ")}.
+  const bankLine = bank ? `\nRelevé issu de : ${bank}. Tiens compte des conventions de libellé de cette banque.` : "";
+
+  const prompt = `Catégorise ces transactions bancaires françaises.${bankLine}
+Catégories disponibles : ${CATEGORIES_FLAT.join(", ")}.
 Format de chaque ligne : id|direction|montant|libellé
 
 Réponds UNIQUEMENT avec un tableau JSON sans markdown :
@@ -67,9 +56,38 @@ ${list}`;
 
     const raw = response.choices[0]?.message?.content?.trim() ?? "[]";
     const cleaned = raw.replace(/^```(?:json)?|```$/gm, "").trim();
-    const parsed: { id: string; categorie: string }[] = JSON.parse(cleaned);
 
-    return NextResponse.json({ rows: parsed });
+    let json: unknown;
+    try {
+      json = JSON.parse(cleaned);
+    } catch {
+      const fallback = rows.map((r) => ({
+        id: r.id,
+        categorie: r.direction === "revenu" ? "salaire" : "autre",
+      }));
+      return NextResponse.json({ rows: fallback });
+    }
+
+    const result = categorizeResponseSchema.safeParse(json);
+    if (!result.success) {
+      const fallback = rows.map((r) => ({
+        id: r.id,
+        categorie: r.direction === "revenu" ? "salaire" : "autre",
+      }));
+      return NextResponse.json({ rows: fallback });
+    }
+
+    // Keep only categories that actually exist in the app's taxonomy — an
+    // unrecognized `categorie` string from the model falls back per-row
+    // rather than propagating a value the UI has no color/icon/group for.
+    const known = new Set(CATEGORIES_FLAT);
+    const validated = result.data.map((r) => {
+      const source = rows.find((row) => row.id === r.id);
+      const fallbackCat = source?.direction === "revenu" ? "salaire" : "autre";
+      return { id: r.id, categorie: known.has(r.categorie) ? r.categorie : fallbackCat };
+    });
+
+    return NextResponse.json({ rows: validated });
   } catch {
     const fallback = rows.map((r) => ({
       id: r.id,

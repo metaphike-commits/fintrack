@@ -22,6 +22,8 @@ export interface BaseItem {
   compteId?: string;
   notes?: string;
   archived: boolean;
+  /** Set when automatically synced — "patrimoine" from passifs, "compte" from credit accounts */
+  source?: "patrimoine" | "compte";
 }
 
 interface BaseFinanciereState {
@@ -37,6 +39,15 @@ interface BaseFinanciereState {
     depenses: { label: string; montant: number; categorie: string; billingDay?: number; type?: BaseItemType; compteId?: string }[]
   ) => void;
   purgePonctuel: () => number;
+  syncFromPatrimoine: (activePassifs: {
+    id: string; label: string; mensualite: number; billingDay?: number; categorie: string;
+    dateDebut?: string; dateFin?: string;
+  }[]) => void;
+  syncFromComptes: (creditComptes: { id: string; label: string; solde: number; billingDay?: number }[]) => void;
+}
+
+export function isSyncedItem(item: BaseItem): boolean {
+  return item.source === "patrimoine" || item.source === "compte";
 }
 
 export const useBaseFinanciereStore = create<BaseFinanciereState>()(
@@ -72,6 +83,49 @@ export const useBaseFinanciereStore = create<BaseFinanciereState>()(
         });
         return count;
       },
+
+      syncFromPatrimoine: (activePassifs) =>
+        set((s) => {
+          const nonPat = s.items.filter((i) => i.source !== "patrimoine");
+          const synced: BaseItem[] = activePassifs.map((p) => ({
+            id: `pat:${p.id}`,
+            label: p.label,
+            montant: p.mensualite,
+            direction: "depense" as Direction,
+            categorie: p.categorie,
+            frequence: "mensuel" as Frequence,
+            billingDay: p.billingDay,
+            dateDebut: p.dateDebut,
+            dateFin: p.dateFin,
+            archived: false,
+            source: "patrimoine" as const,
+          }));
+          return { items: [...nonPat, ...synced] };
+        }),
+
+      syncFromComptes: (creditComptes) =>
+        set((s) => {
+          const nonCompte = s.items.filter((i) => i.source !== "compte");
+          const now = new Date();
+          const dateDebut = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+          const dateFin   = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+          const synced: BaseItem[] = creditComptes
+            .filter((c) => c.solde < 0)
+            .map((c) => ({
+              id: `compte:${c.id}`,
+              label: c.label,
+              montant: Math.abs(c.solde),
+              direction: "depense" as Direction,
+              categorie: "crédit",
+              frequence: "mensuel" as Frequence,
+              billingDay: c.billingDay,
+              dateDebut,
+              dateFin,
+              archived: false,
+              source: "compte" as const,
+            }));
+          return { items: [...nonCompte, ...synced] };
+        }),
 
       seedFromOnboarding: (revenus, depenses) =>
         set((s) => {

@@ -21,29 +21,34 @@ interface CatRow {
   derive: number; // (reel - prevu) / prevu * 100, null if prevu=0
 }
 
-export function BudgetVsReel() {
+export function BudgetVsReel({ year, month }: { year?: number; month?: number } = {}) {
   const items = useBaseFinanciereStore((s) => s.items);
   const transactions = useTransactionsStore((s) => s.transactions);
 
   const now = new Date();
-  const currentMonth = now.getMonth();
-  const currentYear = now.getFullYear();
+  const currentMonth = month ?? now.getMonth();
+  const currentYear = year ?? now.getFullYear();
 
-  const monthLabel = now.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  const monthLabel = new Date(currentYear, currentMonth, 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
 
   const rows = useMemo<CatRow[]>(() => {
     // Prévu : base financière dépenses actives, par catégorie (mensuel normalisé)
+    // Items with a date range are only counted when the target month overlaps that range.
+    const monthStart = new Date(currentYear, currentMonth, 1);
+    const monthEnd   = new Date(currentYear, currentMonth + 1, 0);
     const prevu = new Map<string, number>();
     for (const item of items) {
       if (item.archived || item.direction !== "depense") continue;
+      if (item.dateFin   && new Date(item.dateFin)   < monthStart) continue;
+      if (item.dateDebut && new Date(item.dateDebut) > monthEnd)   continue;
       const cat = item.categorie || "autre";
       prevu.set(cat, (prevu.get(cat) ?? 0) + toMensuel(item));
     }
 
-    // Réel : transactions dépenses du mois courant, par catégorie
+    // Réel : transactions dépenses du mois courant, par catégorie (hors transferts internes)
     const reel = new Map<string, number>();
     for (const tx of transactions) {
-      if (tx.direction !== "depense") continue;
+      if (tx.direction !== "depense" || tx.excludedFromAnalytics) continue;
       const d = new Date(tx.date);
       if (d.getMonth() !== currentMonth || d.getFullYear() !== currentYear) continue;
       const cat = tx.categorie || "autre";

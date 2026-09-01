@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 
 const ROUTES: Record<string, string> = {
   "1": "/dashboard",
-  "2": "/base-financiere",
-  "3": "/scenarios",
-  "4": "/timeline",
-  "5": "/import",
-  "6": "/analyse",
+  "2": "/timeline",
+  "3": "/budget",
+  "4": "/base-financiere",
+  "5": "/analyse",
+  "6": "/patrimoine",
 };
 
 export function GlobalShortcuts() {

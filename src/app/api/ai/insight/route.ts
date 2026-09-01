@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { insightPartSchema } from "@/lib/ai/schemas";
 
 export const runtime = "nodejs";
 
@@ -70,10 +71,19 @@ Ne commence pas par "Bonjour". Commence directement.`;
     });
 
     const raw = response.choices[0]?.message?.content?.trim() ?? "";
-    const parts = raw.split("|||");
-    const insight = parts[0]?.trim() ?? null;
-    const action = parts[1]?.trim() ?? null;
-    return NextResponse.json({ insight, action });
+    const [rawInsight, rawAction] = raw.split("|||");
+
+    const insightResult = insightPartSchema.safeParse(rawInsight);
+    const actionResult = insightPartSchema.safeParse(rawAction);
+
+    if (!insightResult.success && !actionResult.success) {
+      return NextResponse.json({ insight: null, action: null, error: "Réponse IA invalide (format inattendu)." });
+    }
+
+    return NextResponse.json({
+      insight: insightResult.success ? insightResult.data : null,
+      action: actionResult.success ? actionResult.data : null,
+    });
   } catch {
     return NextResponse.json({ insight: null, action: null, error: "Erreur OpenAI." }, { status: 200 });
   }

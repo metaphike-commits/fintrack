@@ -152,9 +152,40 @@ export function detectRecurring(rows: ParsedRow[]): ParsedRow[] {
     .map((g) => g.row);
 }
 
+async function readImageAsBase64(file: File): Promise<{ base64: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      const [meta, base64] = dataUrl.split(",");
+      const mimeType = meta.match(/:(.*?);/)?.[1] ?? "image/png";
+      resolve({ base64, mimeType });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export async function parseFile(file: File): Promise<ParsedRow[]> {
   const isPDF   = /\.pdf$/i.test(file.name);
   const isExcel = /\.(xlsx|xls)$/i.test(file.name);
+  const isImage = /\.(png|jpg|jpeg|webp)$/i.test(file.name) || file.type.startsWith("image/");
+
+  if (isImage) {
+    const { base64, mimeType } = await readImageAsBase64(file);
+    const res = await fetch("/api/ai/pdf-parse", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ images: [base64], mimeType }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error ?? `Erreur image : ${res.status}`);
+    }
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    return data.rows ?? [];
+  }
 
   if (isPDF) {
     const content = await extractPDFContent(file);

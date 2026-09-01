@@ -1,28 +1,36 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Upload, FileText } from "lucide-react";
+import { Upload, FileText, Image } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 interface DropZoneProps {
-  onFile: (file: File) => void;
+  onFiles: (files: File[]) => void;
 }
 
-export function DropZone({ onFile }: DropZoneProps) {
+export function DropZone({ onFiles }: DropZoneProps) {
   const [dragging, setDragging] = useState(false);
+  const [dragCount, setDragCount] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) onFile(file);
+    setDragCount(0);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) onFiles(files);
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(true);
+    setDragCount(e.dataTransfer.items.length);
   }
 
   return (
     <div
-      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-      onDragLeave={() => setDragging(false)}
+      onDragOver={handleDragOver}
+      onDragLeave={() => { setDragging(false); setDragCount(0); }}
       onDrop={handleDrop}
       onClick={() => inputRef.current?.click()}
       className={cn(
@@ -35,9 +43,14 @@ export function DropZone({ onFile }: DropZoneProps) {
       <input
         ref={inputRef}
         type="file"
-        accept=".csv,.txt,.xlsx,.xls,.pdf"
+        multiple
+        accept=".csv,.txt,.xlsx,.xls,.pdf,.png,.jpg,.jpeg,.webp"
         className="sr-only"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }}
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
+          if (files.length > 0) onFiles(files);
+          e.target.value = "";
+        }}
       />
       <div className={cn(
         "w-12 h-12 rounded-full flex items-center justify-center transition-colors",
@@ -49,13 +62,24 @@ export function DropZone({ onFile }: DropZoneProps) {
       </div>
       <div className="text-center space-y-1">
         <p className="text-sm font-medium text-ink">
-          {dragging ? "Relâchez pour analyser" : "Déposez votre relevé bancaire"}
+          {dragging
+            ? dragCount > 1
+              ? `Relâchez ${dragCount} fichiers`
+              : "Relâchez pour analyser"
+            : "Déposez vos relevés bancaires"}
         </p>
-        <p className="text-xs text-ink-ghost">ou cliquez pour sélectionner un fichier</p>
+        <p className="text-xs text-ink-ghost">
+          ou cliquez pour sélectionner un ou plusieurs fichiers
+        </p>
       </div>
-      <p className="text-xs text-ink-ghost text-center">
-        CSV · Excel (.xlsx) · PDF — BNP Paribas · Société Générale · Crédit Agricole · LCL
-      </p>
+      <div className="flex items-center gap-3 text-xs text-ink-ghost">
+        <span className="flex items-center gap-1"><FileText size={11} /> CSV · Excel · PDF</span>
+        <span className="opacity-40">·</span>
+        <span className="flex items-center gap-1">
+          {/* eslint-disable-next-line jsx-a11y/alt-text -- lucide-react icon, not next/image; has no alt prop */}
+          <Image size={11} /> Capture d'écran PNG/JPG
+        </span>
+      </div>
     </div>
   );
 }

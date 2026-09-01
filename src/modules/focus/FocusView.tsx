@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, GitBranch } from "lucide-react";
 import Link from "next/link";
 import { useBaseFinanciereStore } from "@/store/baseFinanciere";
-import { useCompteStore } from "@/store/compte";
-import { useComptesStore, getSoldeRunway } from "@/store/comptes";
 import { usePreferencesStore } from "@/store/preferences";
 import { useScenariosStore } from "@/store/scenarios";
 import {
@@ -16,6 +14,7 @@ import {
   computeScenarioNet,
 } from "@/lib/projection";
 import { calculateRunway, calculateRunwayConfort } from "@/lib/runway";
+import { useSoldeEffectif } from "@/hooks/useSoldeEffectif";
 import type { BaseItem } from "@/store/baseFinanciere";
 import type { ScenarioItem } from "@/store/scenarios";
 import { FocusCourbe } from "./FocusCourbe";
@@ -55,15 +54,12 @@ export function FocusView() {
   const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
 
   const { items } = useBaseFinanciereStore();
-  const { soldeCourant } = useCompteStore();
-  const comptes = useComptesStore((s) => s.comptes);
-  const soldeRunway = getSoldeRunway(comptes);
-  const soldeEffectif = soldeRunway ?? soldeCourant;
+  const soldeEffectif = useSoldeEffectif();
   const { confortThreshold } = usePreferencesStore();
   const { scenarios } = useScenariosStore();
 
   const active = useMemo(() => items.filter((i) => !i.archived), [items]);
-  const monthlyNet = useMemo(() => computeBaseNet(active), [active]);
+  const monthlyNet = useMemo(() => computeBaseNet(active, new Date()), [active]);
 
   const ghostSoldes = useMemo(
     () => (soldeEffectif !== null ? buildGhostSoldes(soldeEffectif, monthlyNet) : []),
@@ -143,6 +139,12 @@ export function FocusView() {
             style={{ color: "var(--ink-soft)", opacity: 0.5 }}
           >
             · 90 jours
+          </span>
+          <span
+            className="text-[9px] px-1.5 py-0.5 rounded font-mono ml-1"
+            style={{ background: "rgba(245,158,11,0.12)", color: "#f59e0b" }}
+          >
+            Simulation
           </span>
         </div>
 

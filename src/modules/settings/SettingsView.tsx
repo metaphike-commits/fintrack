@@ -38,16 +38,17 @@ const STORE_KEYS = [
   "fts-patrimoine",
   "fts-engagements",
   "fts-coups-durs",
+  "fts-budget",
 ];
 
 const SHORTCUTS = [
   { keys: ["Esc"], label: "Quitter le mode Focus" },
   { keys: ["Alt", "1"], label: "Cockpit" },
-  { keys: ["Alt", "2"], label: "Base Financière" },
-  { keys: ["Alt", "3"], label: "Scénarios" },
-  { keys: ["Alt", "4"], label: "Timeline" },
-  { keys: ["Alt", "5"], label: "Import IA" },
-  { keys: ["Alt", "6"], label: "Analyse" },
+  { keys: ["Alt", "2"], label: "Timeline" },
+  { keys: ["Alt", "3"], label: "Budget" },
+  { keys: ["Alt", "4"], label: "Base Financière" },
+  { keys: ["Alt", "5"], label: "Analyse" },
+  { keys: ["Alt", "6"], label: "Patrimoine" },
 ];
 
 function Kbd({ children }: { children: string }) {
@@ -79,6 +80,7 @@ export function SettingsView() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [exportDone, setExportDone] = useState(false);
   const [importStatus, setImportStatus] = useState<"idle" | "success" | "error">("idle");
+  const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
   const [pdfDone, setPdfDone] = useState(false);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | "unsupported">(() =>
     typeof window !== "undefined" ? getNotificationPermission() : "unsupported"
@@ -87,6 +89,7 @@ export function SettingsView() {
 
   const {
     confortThreshold, setConfortThreshold,
+    budgetReviewDay, setBudgetReviewDay,
     reconciliationAmountTol, setReconciliationAmountTol,
     notificationsEnabled, setNotificationsEnabled,
     notificationRunwayThreshold, setNotificationRunwayThreshold,
@@ -178,18 +181,36 @@ export function SettingsView() {
     setTimeout(() => setExportDone(false), 2500);
   }
 
+  // Selecting a file only stages it — nothing is written until the user
+  // explicitly confirms below (H1 fiabilisation : plus de remplacement
+  // silencieux au simple choix de fichier).
   function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImportStatus("idle");
+    setPendingImportFile(file);
+  }
+
+  function handleCancelImport() {
+    setPendingImportFile(null);
+  }
+
+  function handleConfirmImport() {
+    const file = pendingImportFile;
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
         const data = JSON.parse(ev.target?.result as string) as Record<string, unknown>;
-        for (const [key, value] of Object.entries(data)) {
-          if (STORE_KEYS.includes(key)) {
-            localStorage.setItem(key, JSON.stringify(value));
-          }
+        const recognizedKeys = Object.keys(data).filter((k) => STORE_KEYS.includes(k));
+        if (recognizedKeys.length === 0) {
+          throw new Error("Aucune clé Fintrack reconnue dans ce fichier.");
         }
+        for (const key of recognizedKeys) {
+          localStorage.setItem(key, JSON.stringify(data[key]));
+        }
+        setPendingImportFile(null);
         setImportStatus("success");
         setTimeout(() => window.location.reload(), 1200);
       } catch {
@@ -198,7 +219,6 @@ export function SettingsView() {
       }
     };
     reader.readAsText(file);
-    e.target.value = "";
   }
 
   async function handleRequestPermission() {
@@ -316,6 +336,28 @@ export function SettingsView() {
                       className="w-28"
                     />
                     <span className="text-xs text-ink-soft mt-1">€</span>
+                  </div>
+                </div>
+
+                <div className="p-4 flex items-start gap-4">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-ink mb-0.5">Jour de revue budgétaire</p>
+                    <p className="text-xs text-ink-soft">
+                      Jour du mois utilisé comme point d'ancrage pour le calcul du budget du mois suivant (solde projeté à cette date).
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Input
+                      label=""
+                      type="number"
+                      value={String(budgetReviewDay)}
+                      onChange={(e) => {
+                        const v = parseInt(e.target.value, 10);
+                        if (!isNaN(v)) setBudgetReviewDay(v);
+                      }}
+                      className="w-28"
+                    />
+                    <span className="text-xs text-ink-soft mt-1">/ mois</span>
                   </div>
                 </div>
 
@@ -469,36 +511,68 @@ export function SettingsView() {
                   </Button>
                 </div>
 
-                <div className="p-4 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-ink mb-0.5">Importer</p>
-                    <p className="text-xs text-ink-soft">
-                      Restaure une sauvegarde JSON. Remplace toutes les données actuelles.
-                    </p>
-                    {importStatus === "success" && (
-                      <p className="text-xs text-calm mt-1">Importé — rechargement en cours…</p>
-                    )}
-                    {importStatus === "error" && (
-                      <p className="text-xs text-critique mt-1">Fichier invalide ou corrompu.</p>
+                <div className="p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-ink mb-0.5">Importer</p>
+                      <p className="text-xs text-ink-soft">
+                        Restaure une sauvegarde JSON. Remplace toutes les données actuelles.
+                      </p>
+                      {importStatus === "success" && (
+                        <p className="text-xs text-calm mt-1">Importé — rechargement en cours…</p>
+                      )}
+                      {importStatus === "error" && (
+                        <p className="text-xs text-critique mt-1">Fichier invalide, corrompu, ou sans données Fintrack reconnues.</p>
+                      )}
+                    </div>
+                    {!pendingImportFile && (
+                      <div>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".json"
+                          className="hidden"
+                          onChange={handleImportFile}
+                        />
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          leftIcon={<Upload size={13} />}
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          Restaurer
+                        </Button>
+                      </div>
                     )}
                   </div>
-                  <div>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".json"
-                      className="hidden"
-                      onChange={handleImportFile}
-                    />
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      leftIcon={<Upload size={13} />}
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      Restaurer
-                    </Button>
-                  </div>
+
+                  {pendingImportFile && (
+                    <div className="rounded-lg border border-critique/30 bg-surface p-3 space-y-3">
+                      <div className="flex items-start gap-2 text-sm text-critique">
+                        <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                        <span>
+                          « {pendingImportFile.name} » va remplacer toutes vos données actuelles — action irréversible.
+                          Exportez une sauvegarde de l&apos;état actuel avant de continuer si vous n&apos;en avez pas déjà une.
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          leftIcon={exportDone ? <CheckCircle2 size={13} className="text-calm" /> : <Download size={13} />}
+                          onClick={handleExport}
+                        >
+                          {exportDone ? "Exporté !" : "Sauvegarder l'état actuel d'abord"}
+                        </Button>
+                        <Button variant="danger" size="sm" onClick={handleConfirmImport}>
+                          Confirmer le remplacement
+                        </Button>
+                        <Button variant="secondary" size="sm" onClick={handleCancelImport}>
+                          Annuler
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </section>
@@ -559,7 +633,7 @@ export function SettingsView() {
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-ink-soft">Version</p>
                   <span className="text-xs font-mono text-ink px-2 py-0.5 rounded bg-surface-overlay border border-border">
-                    V5.1
+                    V3.0
                   </span>
                 </div>
                 <div className="flex items-center justify-between">

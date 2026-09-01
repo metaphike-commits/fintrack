@@ -56,42 +56,83 @@
   --transition-slow: 280ms ease;
 }
 
-/* ── Dark theme — Obsidian × Electric ─────────────────────── */
+/* ── Dark base — fallback before JS theme injection ───────── */
 .dark {
-  --surface: #04040c;
-  --surface-elevated: #08081a;
-  --surface-glass: rgba(255,255,255,0.04);
-  --surface-overlay: rgba(8,8,26,0.97);
+  --surface:         #020a18;
+  --surface-elevated:#060f23;
+  --surface-glass:   rgba(6,15,35,0.85);
+  --surface-overlay: rgba(2,10,24,0.97);
 
-  --accent: #8b5cf6;
-  --accent-soft: rgba(139,92,246,0.12);
-  --accent-hover: #7c3aed;
-  --accent-glow: rgba(139,92,246,0.28);
+  --accent:       #1d8cf8;
+  --accent-soft:  rgba(29,140,248,0.12);
+  --accent-hover: #0d7de8;
+  --accent-glow:  rgba(29,140,248,0.30);
 
-  --calm: #10b981;
-  --calm-soft: rgba(16,185,129,0.10);
-  --calm-glow: rgba(16,185,129,0.25);
+  --calm:          #00d4a8;
+  --calm-soft:     rgba(0,212,168,0.10);
+  --calm-glow:     rgba(0,212,168,0.25);
+  --attention:     #ff9f43;
+  --attention-soft:rgba(255,159,67,0.10);
+  --attention-glow:rgba(255,159,67,0.25);
+  --critique:      #ff5f7e;
+  --critique-soft: rgba(255,95,126,0.10);
+  --critique-glow: rgba(255,95,126,0.25);
 
-  --attention: #f59e0b;
-  --attention-soft: rgba(245,158,11,0.10);
-  --attention-glow: rgba(245,158,11,0.25);
+  --ink:       rgba(210,230,255,0.92);
+  --ink-soft:  rgba(160,195,240,0.55);
+  --ink-ghost: rgba(100,150,210,0.28);
 
-  --critique: #ef4444;
-  --critique-soft: rgba(239,68,68,0.10);
-  --critique-glow: rgba(239,68,68,0.25);
+  --border:        rgba(29,140,248,0.12);
+  --border-strong: rgba(29,140,248,0.22);
+  --border-accent: rgba(29,140,248,0.35);
+  --muted:         rgba(100,150,210,0.30);
 
-  --ink: rgba(255,255,255,0.93);
-  --ink-soft: rgba(255,255,255,0.50);
-  --ink-ghost: rgba(255,255,255,0.24);
+  --shadow-sm: 0 1px 3px rgba(0,5,20,0.50);
+  --shadow-md: 0 4px 20px rgba(0,5,20,0.60), 0 1px 4px rgba(0,5,20,0.50);
+  --shadow-lg: 0 24px 48px rgba(0,5,20,0.70), 0 4px 16px rgba(0,5,20,0.60);
 
-  --border: rgba(255,255,255,0.08);
-  --border-strong: rgba(255,255,255,0.16);
-  --border-accent: rgba(139,92,246,0.35);
-  --muted: rgba(255,255,255,0.28);
+  /* Graph token fallbacks (midnight defaults) */
+  --graph-line:            #1d8cf8;
+  --graph-line-glow:       rgba(29,140,248,0.35);
+  --graph-area-pos-top:    rgba(29,140,248,0.25);
+  --graph-area-pos-bottom: rgba(29,140,248,0.02);
+  --graph-area-neg-top:    rgba(255,95,126,0.02);
+  --graph-area-neg-bottom: rgba(255,95,126,0.25);
+  --graph-grid:            rgba(29,140,248,0.07);
+  --graph-point-bas:       #ff5f7e;
+  --graph-point-bas-glow:  rgba(255,95,126,0.45);
+  --graph-today:           rgba(29,140,248,0.22);
+  --graph-today-dot:       #1d8cf8;
+  --graph-critical-zone:   rgba(255,95,126,0.04);
+  --graph-confort-line:    #ff9f43;
+  --graph-past-shade:      rgba(29,140,248,0.03);
+  --graph-variable-neg:    #b91c1c;
 
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.40);
-  --shadow-md: 0 4px 20px rgba(0,0,0,0.50), 0 1px 4px rgba(0,0,0,0.40);
-  --shadow-lg: 0 24px 48px rgba(0,0,0,0.60), 0 4px 16px rgba(0,0,0,0.50);
+  /* Ambient orb fallbacks */
+  --ambient-orb1: #1d8cf8;
+  --ambient-orb2: #00d4a8;
+  --ambient-orb3: #ff9f43;
+  --ambient-orb1-opacity: 0.08;
+  --ambient-orb2-opacity: 0.05;
+  --ambient-orb3-opacity: 0.04;
+
+  /* Sidebar */
+  --sidebar-bg:     rgba(2,8,18,0.98);
+  --sidebar-border: rgba(29,140,248,0.10);
+
+  /* Focus mode */
+  --focus-surface:          #010610;
+  --focus-surface-elevated: #03091a;
+  --focus-glow:             rgba(29,140,248,0.20);
+
+  /* Calendar */
+  --cal-revenus:      #00d4a8;
+  --cal-fixes:        #1d8cf8;
+  --cal-variables:    #ff9f43;
+  --cal-epargne:      #a78bfa;
+  --cal-engagements:  #ff5f7e;
+  --cal-today:        rgba(29,140,248,0.06);
+  --cal-month-border: rgba(29,140,248,0.18);
 }
 
 /* ── Focus mode — Void ──────────────────────────────────────── */
@@ -154,6 +195,14 @@
 @keyframes pulse-critique {
   0%, 100% { opacity: 0.4; }
   50%       { opacity: 0.9; }
+}
+@keyframes pb-pulse-ring {
+  0%   { transform: scale(0.3); opacity: 0.8; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+@keyframes today-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%       { opacity: 1.0; transform: scale(1.4); }
 }
 
 @keyframes shimmer {
@@ -292,3 +341,26 @@ body {
 /* Ambient glow pulse utilities */
 .pulse-calm     { animation: pulse-calm     2.5s ease-in-out infinite; }
 .pulse-critique { animation: pulse-critique 1.8s ease-in-out infinite; }
+
+/* ══════════════════════════════════════════════════════════════
+   THEME TRANSITIONS
+   CSS properties that should animate when the theme changes.
+   The actual token values are injected by AppShell via setProperty().
+═══════════════════════════════════════════════════════════════ */
+
+html, body {
+  transition:
+    background-color 280ms ease,
+    color 280ms ease;
+}
+
+/* Surface-bearing elements transition smoothly */
+.theme-transition,
+.card-hover,
+[class*="bg-surface"] {
+  transition:
+    background-color 280ms ease,
+    border-color 280ms ease,
+    box-shadow 280ms ease,
+    color 220ms ease;
+}

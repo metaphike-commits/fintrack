@@ -24,6 +24,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { useStaggerEntrance } from "@/hooks/useStaggerEntrance";
 import { Button } from "@/components/ui/Button";
 import { BudgetVsReel } from "./BudgetVsReel";
+import { TransactionsTable } from "./TransactionsTable";
 import { cn } from "@/lib/cn";
 
 // ── Design tokens ──────────────────────────────────────────────
@@ -625,30 +626,61 @@ function Recommandations({ recos }: { recos: Reco[] }) {
 }
 
 // ── Main view ──────────────────────────────────────────────────
+type AnalyseTab     = "dashboard" | "transactions";
+type PeriodPreset   = "1m" | "3m" | "6m" | "ytd" | "all";
+
+const PERIOD_LABELS: { key: PeriodPreset; label: string }[] = [
+  { key: "1m",  label: "1 mois"  },
+  { key: "3m",  label: "3 mois"  },
+  { key: "6m",  label: "6 mois"  },
+  { key: "ytd", label: "Année"   },
+  { key: "all", label: "Tout"    },
+];
+
 export function AnalyseView() {
   const { transactions, clearAll } = useTransactionsStore();
+  const [tab, setTab]               = useState<AnalyseTab>("dashboard");
+  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("all");
+  const [variablesOnly, setVariablesOnly] = useState(false);
 
   const kpiRowRef = useStaggerEntrance<HTMLDivElement>({ duration: 480 });
 
-  const tendance     = useMemo(() => getTendanceFull(transactions), [transactions]);
-  const topCat       = useMemo(() => getTopCategories(transactions), [transactions]);
-  const anomalies    = useMemo(() => detectAnomalies(transactions, 6), [transactions]);
-  const compressibles = useMemo(() => getDepensesCompressibles(transactions), [transactions]);
-  const periode      = useMemo(() => getPeriode(transactions), [transactions]);
-  const dowStats     = useMemo(() => getDayOfWeekStats(transactions), [transactions]);
-  const sankeyData   = useMemo(() => getSankeyData(transactions), [transactions]);
-  const topBenef     = useMemo(() => getTopBeneficiaires(transactions, 5), [transactions]);
-  const catEvol      = useMemo(() => getEvolutionCategories(transactions), [transactions]);
-  const insights     = useMemo(() => computeInsights(transactions), [transactions]);
-  const cashflowMoyen = useMemo(() => getCashflowMensuelMoyen(transactions), [transactions]);
-  const burnRate     = useMemo(() => getBurnRateGlissant(transactions), [transactions]);
-  const score        = useMemo(() => getScoreComportemental(transactions,
-    transactions.filter(t => t.direction === "revenu").reduce((s,t) => s + t.montant, 0),
-    transactions.filter(t => t.direction === "depense").reduce((s,t) => s + t.montant, 0)
-  ), [transactions]);
+  const periodStart = useMemo(() => {
+    const now = new Date();
+    if (periodPreset === "1m")  return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+    if (periodPreset === "3m")  return new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+    if (periodPreset === "6m")  return new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+    if (periodPreset === "ytd") return new Date(now.getFullYear(), 0, 1);
+    return null;
+  }, [periodPreset]);
 
-  const totalRevenu  = useMemo(() => transactions.filter(t => t.direction === "revenu").reduce((s,t) => s + t.montant, 0), [transactions]);
-  const totalDepense = useMemo(() => transactions.filter(t => t.direction === "depense").reduce((s,t) => s + t.montant, 0), [transactions]);
+  // Exclude internal transfers, apply period filter and variables-only toggle
+  const analyticsTxs = useMemo(() => {
+    let txs = transactions.filter((t) => !t.excludedFromAnalytics);
+    if (periodStart) txs = txs.filter((t) => new Date(t.date) >= periodStart);
+    if (variablesOnly) txs = txs.filter((t) => !t.reconciledItemId);
+    return txs;
+  }, [transactions, periodStart, variablesOnly]);
+
+  const tendance     = useMemo(() => getTendanceFull(analyticsTxs), [analyticsTxs]);
+  const topCat       = useMemo(() => getTopCategories(analyticsTxs), [analyticsTxs]);
+  const anomalies    = useMemo(() => detectAnomalies(analyticsTxs, 6), [analyticsTxs]);
+  const compressibles = useMemo(() => getDepensesCompressibles(analyticsTxs), [analyticsTxs]);
+  const periode      = useMemo(() => getPeriode(analyticsTxs), [analyticsTxs]);
+  const dowStats     = useMemo(() => getDayOfWeekStats(analyticsTxs), [analyticsTxs]);
+  const sankeyData   = useMemo(() => getSankeyData(analyticsTxs), [analyticsTxs]);
+  const topBenef     = useMemo(() => getTopBeneficiaires(analyticsTxs, 5), [analyticsTxs]);
+  const catEvol      = useMemo(() => getEvolutionCategories(analyticsTxs), [analyticsTxs]);
+  const insights     = useMemo(() => computeInsights(analyticsTxs), [analyticsTxs]);
+  const cashflowMoyen = useMemo(() => getCashflowMensuelMoyen(analyticsTxs), [analyticsTxs]);
+  const burnRate     = useMemo(() => getBurnRateGlissant(analyticsTxs), [analyticsTxs]);
+  const score        = useMemo(() => getScoreComportemental(analyticsTxs,
+    analyticsTxs.filter(t => t.direction === "revenu").reduce((s,t) => s + t.montant, 0),
+    analyticsTxs.filter(t => t.direction === "depense").reduce((s,t) => s + t.montant, 0)
+  ), [analyticsTxs]);
+
+  const totalRevenu  = useMemo(() => analyticsTxs.filter(t => t.direction === "revenu").reduce((s,t) => s + t.montant, 0), [analyticsTxs]);
+  const totalDepense = useMemo(() => analyticsTxs.filter(t => t.direction === "depense").reduce((s,t) => s + t.montant, 0), [analyticsTxs]);
   const net          = totalRevenu - totalDepense;
   const tauxEpargne  = totalRevenu > 0 ? (net / totalRevenu) * 100 : 0;
 
@@ -669,7 +701,7 @@ export function AnalyseView() {
   // Recommandations
   const recos = useMemo<Reco[]>(() => {
     const r: Reco[] = [];
-    const aboTotal = transactions.filter(t => t.direction === "depense" && t.categorie === "abonnements").reduce((s,t) => s + t.montant, 0);
+    const aboTotal = analyticsTxs.filter(t => t.direction === "depense" && t.categorie === "abonnements").reduce((s,t) => s + t.montant, 0);
     if (aboTotal > 0) r.push({
       title: "Réduire les abonnements",
       desc: `Vous avez ${fmt(aboTotal)} en abonnements sur la période. Identifiez les services peu utilisés.`,
@@ -699,7 +731,7 @@ export function AnalyseView() {
       icon: <ChevronRight size={11} />,
     });
     return r.slice(0, 4);
-  }, [transactions, tauxEpargne, totalRevenu, burnRate, compressibles]);
+  }, [analyticsTxs, tauxEpargne, totalRevenu, burnRate, compressibles]);
 
   if (transactions.length === 0) {
     return (
@@ -735,16 +767,75 @@ export function AnalyseView() {
             Score {score.score}/100 · {score.label}
           </div>
         </div>
-        <button
-          onClick={clearAll}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs text-ink-ghost hover:text-critique hover:bg-white/5 transition-colors"
-        >
-          <Trash2 size={12} />Effacer
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ background: "rgba(255,255,255,0.05)", border: GB }}>
+            {(["dashboard", "transactions"] as AnalyseTab[]).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={cn(
+                  "text-xs px-3 py-1 rounded-md transition-colors",
+                  tab === t ? "bg-accent text-white" : "text-ink-ghost hover:text-ink"
+                )}
+              >
+                {t === "dashboard" ? "Vue d'ensemble" : "Transactions"}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={clearAll}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs text-ink-ghost hover:text-critique hover:bg-white/5 transition-colors"
+          >
+            <Trash2 size={12} />Effacer
+          </button>
+        </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-4">
+      {/* Period controls — dashboard only */}
+      {tab === "dashboard" && (
+        <div className="shrink-0 flex items-center gap-3 px-6 py-2" style={{ borderBottom: GB }}>
+          <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ background: "rgba(255,255,255,0.05)", border: GB }}>
+            {PERIOD_LABELS.map((p) => (
+              <button
+                key={p.key}
+                onClick={() => setPeriodPreset(p.key)}
+                className={cn(
+                  "text-[10px] px-2.5 py-1 rounded-md transition-colors",
+                  periodPreset === p.key ? "bg-accent text-white" : "text-ink-ghost hover:text-ink"
+                )}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setVariablesOnly((v) => !v)}
+            className={cn(
+              "flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-md border transition-colors",
+              variablesOnly
+                ? "bg-accent/10 border-accent/30 text-accent"
+                : "border-border text-ink-ghost hover:text-ink"
+            )}
+          >
+            Variables seulement
+          </button>
+          {(periodPreset !== "all" || variablesOnly) && (
+            <span className="text-[9px] text-ink-ghost font-mono ml-auto">
+              {analyticsTxs.length} transaction{analyticsTxs.length !== 1 ? "s" : ""} sélectionnée{analyticsTxs.length !== 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Transactions table */}
+      {tab === "transactions" && (
+        <div className="flex-1 overflow-y-auto p-5">
+          <TransactionsTable />
+        </div>
+      )}
+
+      {/* Dashboard content */}
+      {tab === "dashboard" && <div className="flex-1 overflow-y-auto p-5 space-y-4">
 
         {/* KPI Row */}
         <div ref={kpiRowRef} className="grid grid-cols-6 gap-3">
@@ -784,7 +875,8 @@ export function AnalyseView() {
         {/* Recommandations */}
         <Recommandations recos={recos} />
 
-      </div>
+      </div>}
+
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { parseLocalDate } from "@/lib/dateUtils";
 
 export type EngagementType =
   | "arriere_loyer"      // arriéré de loyer
@@ -87,10 +88,16 @@ export function getTotalEngagements(engagements: Engagement[]): number {
     .reduce((s, e) => s + e.montantRestant, 0);
 }
 
-/** Mensualités dues ce mois (engagements etalementMode = "mensuel", non soldés, non gelés) */
-export function getMensualitesEngagements(engagements: Engagement[]): number {
+/** Mensualités dues ce mois (engagements etalementMode = "mensuel", non soldés, non gelés, dans leur période active) */
+export function getMensualitesEngagements(engagements: Engagement[], refDate?: Date): number {
+  const ref = refDate ?? new Date();
   return engagements
-    .filter((e) => !e.solde && !e.gele && e.etalementMode === "mensuel" && e.mensualite)
+    .filter((e) => {
+      if (e.solde || e.gele || e.etalementMode !== "mensuel" || !e.mensualite) return false;
+      if (e.dateEcheance && parseLocalDate(e.dateEcheance) < ref) return false;
+      if (e.dateDebut    && parseLocalDate(e.dateDebut)    > ref) return false;
+      return true;
+    })
     .reduce((s, e) => s + (e.mensualite ?? 0), 0);
 }
 

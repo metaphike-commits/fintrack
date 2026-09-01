@@ -1,4 +1,5 @@
 import type { BaseItem, Direction, Frequence } from "@/store/baseFinanciere";
+import { parseLocalDate, resolveBillingDay } from "@/lib/dateUtils";
 
 export interface TimelineRow {
   key: string;
@@ -23,8 +24,8 @@ export function getRowsForMonth(
     .filter((item) => {
       if (item.archived) return false;
 
-      const dateDebut = item.dateDebut ? new Date(item.dateDebut) : null;
-      const dateFin = item.dateFin ? new Date(item.dateFin) : null;
+      const dateDebut = item.dateDebut ? parseLocalDate(item.dateDebut) : null;
+      const dateFin = item.dateFin ? parseLocalDate(item.dateFin) : null;
 
       if (dateFin && dateFin < monthStart) return false;
       if (dateDebut && dateDebut > monthEnd) return false;
@@ -63,7 +64,12 @@ export function getRowsForMonth(
       direction: item.direction,
       categorie: item.categorie,
       frequence: item.frequence,
-      billingDay: item.billingDay,
+      billingDay:
+        item.frequence === "ponctuel"
+          ? (item.dateDebut ? parseLocalDate(item.dateDebut).getDate() : item.billingDay)
+          : item.frequence === "hebdomadaire"
+          ? item.billingDay
+          : resolveBillingDay(item.billingDay, item.dateDebut),
     }));
 }
 
@@ -101,31 +107,29 @@ export function getPendingOverdueAmount(
 
     switch (item.frequence) {
       case "mensuel":
-        hasPassed = (item.billingDay ?? 1) <= todayDay;
+        hasPassed = resolveBillingDay(item.billingDay, item.dateDebut) < todayDay;
         break;
 
       case "ponctuel": {
         if (!item.dateDebut) break;
-        const d = new Date(item.dateDebut);
+        const d = parseLocalDate(item.dateDebut);
         hasPassed =
           d.getFullYear() === year &&
           d.getMonth() === month &&
-          d.getDate() <= todayDay;
+          d.getDate() < todayDay;
         break;
       }
 
       case "trimestriel":
       case "annuel": {
-        const refDay = item.billingDay ??
-          (item.dateDebut ? new Date(item.dateDebut).getDate() : 1);
-        hasPassed = refDay <= todayDay;
+        hasPassed = resolveBillingDay(item.billingDay, item.dateDebut) < todayDay;
         break;
       }
 
       case "hebdomadaire": {
         // Check if any weekly occurrence has fired between the 1st and today
-        const refDow = item.dateDebut ? new Date(item.dateDebut).getDay() : 1;
-        for (let d = 1; d <= todayDay; d++) {
+        const refDow = item.dateDebut ? parseLocalDate(item.dateDebut).getDay() : 1;
+        for (let d = 1; d < todayDay; d++) {
           if (new Date(year, month, d).getDay() === refDow) {
             hasPassed = true;
             break;

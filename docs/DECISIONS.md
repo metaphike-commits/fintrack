@@ -49,10 +49,12 @@ Le Sprint 2 (Onboarding & Base Financière) précède le Sprint 6 (Import IA ré
 **Statut :** Accepté
 
 **Décision :**
-Toutes les routes API IA utilisent le SDK OpenAI (`openai` package) avec le modèle `gpt-4o`. Aucune route n'utilise `@anthropic-ai/sdk`.
+Toutes les routes API IA utilisent le SDK OpenAI (`openai` package) — `gpt-4o-mini` pour les routes textuelles (`categorize`, `insight`, `scenario-parse`), `gpt-4o` pour la route vision (`pdf-parse`, sur PDF scannés). Aucune route n'utilise `@anthropic-ai/sdk`.
 
 **Raison :**
-Cohérence de stack, un seul contrat d'API à maintenir, une seule clé d'environnement (`OPENAI_API_KEY`). Le function calling OpenAI est mature et bien documenté.
+Cohérence de stack, un seul contrat d'API à maintenir, une seule clé d'environnement (`OPENAI_API_KEY`). Le SDK OpenAI est mature et bien documenté.
+
+**Précision (corrigée 2026-09-01) :** aucune route n'utilise le function calling / tool use d'OpenAI. Chaque route fait un seul appel prompt → JSON (`response_format: json_object`), validé côté serveur avec zod. C'est du "structured-output prompting", pas du function calling au sens where le modèle choisit d'invoquer un outil.
 
 **Conséquence :**
 `@anthropic-ai/sdk` est interdit dans ce repo. Toute route IA est dans `src/app/api/ai/`.
@@ -177,3 +179,38 @@ Les utilisateurs francais exportent souvent leurs releves depuis leur banque en 
 
 **Consequence :**
 `src/lib/csvParser.ts` unifie CSV et Excel via `parseFile(file: File)`. Toute evolution de l'import doit garder explicite le format supporte et ne doit pas envoyer les releves bancaires a une API externe sans consentement clair.
+
+---
+
+## ADR-011 — Sprint fiabilisation : ESLint (`eslint-config-next`)
+
+**Date :** 2026-08-05
+**Statut :** Accepté
+
+**Décision :**
+`eslint` + `eslint-config-next` (pinné en `^15`, aligné sur `next@15.5.18` installé — la dernière version publiée du package est en `16.x` et n'est pas compatible avec ce projet) + `@eslint/eslintrc`, config flat `eslint.config.mjs` étendant `next/core-web-vitals` + `next/typescript`. Script `npm run lint` ajouté.
+
+**Raison :**
+Aucun lint n'existait sur ce repo (ni script, ni config, ni dépendance) malgré `npx tsc --noEmit` déjà en place. ESLint attrape des classes d'erreurs que TypeScript strict ne couvre pas (hooks React mal dépendantés, imports morts, a11y basique).
+
+**Décision annexe — `react/no-unescaped-entities` désactivée :**
+L'UI est entièrement en français (texte riche en apostrophes : "l'app", "n'est", "aujourd'hui"...). Cette règle exige `&apos;` partout pour un gain nul en correction réelle (un `'` littéral s'affiche correctement) — l'activer aurait forcé l'échappement de dizaines de chaînes existantes sans rapport avec ce sprint. Décision réversible si l'équipe préfère la stricte conformité HTML.
+
+**Conséquence :**
+`npm run lint` doit passer (0 erreur) avant tout merge. Les warnings restants (`react-hooks/exhaustive-deps`, variables inutilisées — 22 au 2026-08-05) sont volontairement laissés pour un futur sprint dédié : plusieurs `exhaustive-deps` touchent des `useMemo`/`useEffect` avec `now = new Date()`, où ajouter la dépendance changerait le comportement (recalcul à chaque render) plutôt que de le corriger — nécessite une revue au cas par cas, pas un fix mécanique.
+
+---
+
+## ADR-012 — Sprint fiabilisation : Vitest pour les tests unitaires
+
+**Date :** 2026-08-05
+**Statut :** Accepté
+
+**Décision :**
+`vitest` + `vite-tsconfig-paths` (résout l'alias `@/*` de `tsconfig.json`). Script `npm run test`. Tests co-localisés dans `src/lib/__tests__/`, ciblés sur les modules de calcul financier : `runway.ts`, `projection.ts`, `timeline.ts`, `budget.ts`.
+
+**Raison :**
+Zéro test existait sur ce repo. Vitest est plus léger que Jest, ESM/TS natif sans configuration de transform séparée, et suffisant pour tester des fonctions pures — pas besoin de `@vitejs/plugin-react` ni de DOM (`jsdom`), aucun des fichiers testés ne rend de JSX. Playwright (déjà mentionné dans le backlog `docs/TASKS.md` pour du E2E) reste hors scope de cette décision : sujet différent (bout-en-bout vs unitaire).
+
+**Conséquence :**
+`npm run test` doit passer avant tout merge touchant `src/lib/`. Les stores Zustand important `persist` (`store/budget.ts`, `store/engagements.ts`) sont importés transitivement par certains tests (via `lib/budget.ts`) — safe en environnement Node car `persist` détecte l'absence de `window` et n'essaie pas de toucher `localStorage`, comme il le fait déjà côté SSR Next.js.

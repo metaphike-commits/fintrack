@@ -9,20 +9,12 @@ import { Button } from "@/components/ui/Button";
 import { Divider } from "@/components/ui/Divider";
 import { cn } from "@/lib/cn";
 import { useComptesStore } from "@/store/comptes";
+import { CATEGORY_SELECT_GROUPS } from "@/lib/categories";
 import type { BaseItem, BaseItemType, Direction, Frequence } from "@/store/baseFinanciere";
 
 const DIRECTIONS = [
   { value: "depense", label: "Dépense" },
   { value: "revenu", label: "Revenu" },
-];
-
-const CATEGORY_GROUPS = [
-  { label: "Revenus",      options: [{ value: "salaire", label: "Salaire" }, { value: "freelance", label: "Freelance" }, { value: "remboursement", label: "Remboursement" }, { value: "allocation", label: "Allocation" }] },
-  { label: "Logement",     options: [{ value: "loyer", label: "Loyer" }, { value: "électricité", label: "Électricité" }, { value: "eau", label: "Eau" }, { value: "internet", label: "Internet" }] },
-  { label: "Transport",    options: [{ value: "transport", label: "Transport" }, { value: "stationnement", label: "Stationnement" }, { value: "carburant", label: "Carburant" }] },
-  { label: "Vie courante", options: [{ value: "alimentation", label: "Alimentation" }, { value: "restauration", label: "Restauration" }, { value: "santé", label: "Santé" }, { value: "loisirs", label: "Loisirs" }, { value: "vêtements", label: "Vêtements" }] },
-  { label: "Financier",    options: [{ value: "abonnements", label: "Abonnements" }, { value: "assurance", label: "Assurance" }, { value: "épargne", label: "Épargne" }, { value: "crédit", label: "Crédit" }, { value: "impôts", label: "Impôts" }, { value: "amende", label: "Amende" }] },
-  { label: "Autre",        options: [{ value: "autre", label: "Autre" }] },
 ];
 
 const FREQUENCES = [
@@ -36,6 +28,7 @@ const FREQUENCES = [
 interface ItemPanelProps {
   open: boolean;
   item?: BaseItem | null;
+  defaults?: Partial<Omit<BaseItem, "id" | "archived">>;
   onClose: () => void;
   onSave: (data: Omit<BaseItem, "id" | "archived">) => void;
 }
@@ -60,7 +53,7 @@ const EMPTY: Omit<BaseItem, "id" | "archived"> = {
   type: undefined,
 };
 
-export function ItemPanel({ open, item, onClose, onSave }: ItemPanelProps) {
+export function ItemPanel({ open, item, defaults, onClose, onSave }: ItemPanelProps) {
   const comptes = useComptesStore((s) => s.comptes);
   const [form, setForm] = useState<Omit<BaseItem, "id" | "archived">>(EMPTY);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -79,10 +72,10 @@ export function ItemPanel({ open, item, onClose, onSave }: ItemPanelProps) {
         billingDay: item.billingDay,
         compteId: item.compteId,
         type: item.type,
-      } : EMPTY);
+      } : { ...EMPTY, ...defaults });
       setErrors({});
     }
-  }, [open, item]);
+  }, [open, item, defaults]);
 
   // Lock body scroll when open
   useEffect(() => {
@@ -99,6 +92,7 @@ export function ItemPanel({ open, item, onClose, onSave }: ItemPanelProps) {
     const e: Record<string, string> = {};
     if (!form.label.trim()) e.label = "Libellé requis.";
     if (!form.montant || form.montant <= 0) e.montant = "Montant invalide.";
+    if (form.frequence === "ponctuel" && !form.dateDebut) e.dateDebut = "Date requise pour un item ponctuel.";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -171,7 +165,7 @@ export function ItemPanel({ open, item, onClose, onSave }: ItemPanelProps) {
           <div className="grid grid-cols-2 gap-3">
             <Select
               label="Catégorie"
-              groups={CATEGORY_GROUPS}
+              groups={CATEGORY_SELECT_GROUPS}
               value={form.categorie}
               onChange={(e) => set("categorie", e.target.value)}
             />
@@ -208,49 +202,74 @@ export function ItemPanel({ open, item, onClose, onSave }: ItemPanelProps) {
             </div>
           )}
 
-          {form.frequence === "mensuel" && (
-            <Input
-              label="Jour de prélèvement"
-              type="number"
-              placeholder="1–31"
-              value={form.billingDay != null ? String(form.billingDay) : ""}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                set("billingDay", isNaN(v) ? undefined : Math.min(31, Math.max(1, v)));
-              }}
-              hint="Optionnel — pour le calcul du point bas du mois."
-            />
+          {form.frequence === "ponctuel" ? (
+            <>
+              <Input
+                label="Date de l'opération"
+                type="date"
+                value={form.dateDebut ?? ""}
+                onChange={(e) => set("dateDebut", e.target.value)}
+                error={errors.dateDebut}
+              />
+              {comptes.length > 0 && (
+                <Select
+                  label="Compte associé"
+                  options={[
+                    { value: "", label: "Aucun compte" },
+                    ...comptes.map((c) => ({ value: c.id, label: c.label })),
+                  ]}
+                  value={form.compteId ?? ""}
+                  onChange={(e) => set("compteId", e.target.value || undefined)}
+                />
+              )}
+            </>
+          ) : (
+            <>
+              {form.frequence === "mensuel" && (
+                <Input
+                  label="Jour de prélèvement"
+                  type="number"
+                  placeholder="1–31"
+                  value={form.billingDay != null ? String(form.billingDay) : ""}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    set("billingDay", isNaN(v) ? undefined : Math.min(31, Math.max(1, v)));
+                  }}
+                  hint="Optionnel — pour le calcul du point bas du mois."
+                />
+              )}
+
+              {comptes.length > 0 && (
+                <Select
+                  label="Compte associé"
+                  options={[
+                    { value: "", label: "Aucun compte" },
+                    ...comptes.map((c) => ({ value: c.id, label: c.label })),
+                  ]}
+                  value={form.compteId ?? ""}
+                  onChange={(e) => set("compteId", e.target.value || undefined)}
+                />
+              )}
+
+              <Divider />
+
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Date de début"
+                  type="date"
+                  value={form.dateDebut ?? ""}
+                  onChange={(e) => set("dateDebut", e.target.value)}
+                />
+                <Input
+                  label="Date de fin"
+                  type="date"
+                  value={form.dateFin ?? ""}
+                  onChange={(e) => set("dateFin", e.target.value)}
+                  hint="Laisser vide si indéfini."
+                />
+              </div>
+            </>
           )}
-
-          {comptes.length > 0 && (
-            <Select
-              label="Compte associé"
-              options={[
-                { value: "", label: "Aucun compte" },
-                ...comptes.map((c) => ({ value: c.id, label: c.label })),
-              ]}
-              value={form.compteId ?? ""}
-              onChange={(e) => set("compteId", e.target.value || undefined)}
-            />
-          )}
-
-          <Divider />
-
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Date de début"
-              type="date"
-              value={form.dateDebut ?? ""}
-              onChange={(e) => set("dateDebut", e.target.value)}
-            />
-            <Input
-              label="Date de fin"
-              type="date"
-              value={form.dateFin ?? ""}
-              onChange={(e) => set("dateFin", e.target.value)}
-              hint="Laisser vide si indéfini."
-            />
-          </div>
 
           <Textarea
             label="Notes"

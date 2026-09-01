@@ -1,5 +1,6 @@
 import type { BaseItem } from "@/store/baseFinanciere";
 import type { ScenarioItem } from "@/store/scenarios";
+import { parseLocalDate, resolveBillingDay } from "@/lib/dateUtils";
 
 export interface DayProjection {
   date: Date;
@@ -17,40 +18,40 @@ function getItemOccurrences(item: BaseItem, startDate: Date, days: number): numb
     const month = d.getMonth();
     const year = d.getFullYear();
 
-    if (item.dateFin && d > new Date(item.dateFin)) continue;
-    if (item.dateDebut && item.frequence !== "ponctuel" && d < new Date(item.dateDebut)) continue;
+    if (item.dateFin && d > parseLocalDate(item.dateFin)) continue;
+    if (item.dateDebut && item.frequence !== "ponctuel" && d < parseLocalDate(item.dateDebut)) continue;
 
     switch (item.frequence) {
       case "mensuel":
-        if (dayOfMonth === (item.billingDay ?? 1)) result.push(i);
+        if (dayOfMonth === resolveBillingDay(item.billingDay, item.dateDebut)) result.push(i);
         break;
 
       case "hebdomadaire": {
-        const refDow = item.dateDebut ? new Date(item.dateDebut).getDay() : 1;
+        const refDow = item.dateDebut ? parseLocalDate(item.dateDebut).getDay() : 1;
         if (d.getDay() === refDow) result.push(i);
         break;
       }
 
       case "trimestriel": {
-        const dd = item.dateDebut ? new Date(item.dateDebut) : null;
+        const dd = item.dateDebut ? parseLocalDate(item.dateDebut) : null;
         const refMonth = dd ? dd.getMonth() : 0;
-        const refDay = item.billingDay ?? (dd ? dd.getDate() : 1);
+        const refDay = resolveBillingDay(item.billingDay, item.dateDebut);
         const diff = (year - (dd?.getFullYear() ?? year)) * 12 + (month - refMonth);
         if (diff >= 0 && diff % 3 === 0 && dayOfMonth === refDay) result.push(i);
         break;
       }
 
       case "annuel": {
-        const dd = item.dateDebut ? new Date(item.dateDebut) : null;
+        const dd = item.dateDebut ? parseLocalDate(item.dateDebut) : null;
         const refMonth = dd ? dd.getMonth() : 0;
-        const refDay = item.billingDay ?? (dd ? dd.getDate() : 1);
+        const refDay = resolveBillingDay(item.billingDay, item.dateDebut);
         if (month === refMonth && dayOfMonth === refDay) result.push(i);
         break;
       }
 
       case "ponctuel": {
         if (item.dateDebut) {
-          const dd = new Date(item.dateDebut);
+          const dd = parseLocalDate(item.dateDebut);
           if (dd.getFullYear() === year && dd.getMonth() === month && dd.getDate() === dayOfMonth)
             result.push(i);
         }
@@ -65,17 +66,34 @@ export function projectDailyBalance(
   soldeInitial: number,
   items: BaseItem[],
   days = 30,
-  startDate = new Date()
+  startDate = new Date(),
+  statuts: Record<string, string> = {},
+  paid: Record<string, boolean> = {},
+  /** Optional day-by-day estimated variable spend (Budget envelopes), same
+   *  length as `days` — see `buildVariableDailySpend`. Opt-in, additive. */
+  dailyVariable?: number[]
 ): DayProjection[] {
   const dailyEvents: DayProjection["events"][] = Array.from({ length: days }, () => []);
+  const sd = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
 
   for (const item of items.filter((i) => !i.archived)) {
     for (const dayIdx of getItemOccurrences(item, startDate, days)) {
+      const occDate = new Date(sd.getFullYear(), sd.getMonth(), sd.getDate() + dayIdx);
+      const key = `${item.id}-${occDate.getFullYear()}-${occDate.getMonth()}`;
+      const st = statuts[key] ?? (paid[key] ? "paye" : "prevu");
+      if (st === "paye" || st === "annule") continue;
       dailyEvents[dayIdx].push({ label: item.label, montant: item.montant, direction: item.direction });
     }
   }
 
-  const sd = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  if (dailyVariable) {
+    for (let i = 0; i < days && i < dailyVariable.length; i++) {
+      if (dailyVariable[i] > 0) {
+        dailyEvents[i].push({ label: "Dépenses variables (estimation)", montant: dailyVariable[i], direction: "depense" });
+      }
+    }
+  }
+
   const result: DayProjection[] = [];
   let running = soldeInitial;
 
@@ -123,22 +141,30 @@ export function toMensuel(item: { montant: number; frequence: string }): number 
     case "hebdomadaire": return item.montant * 52 / 12;
     case "trimestriel": return item.montant / 3;
     case "annuel": return item.montant / 12;
+    case "ponctuel": return 0;
     default: return item.montant;
   }
 }
 
-export function computeBaseNet(baseItems: BaseItem[]): number {
+export function computeBaseNet(baseItems: BaseItem[], refDate?: Date): number {
+  const ref = refDate ?? new Date();
   return baseItems
-    .filter((i) => !i.archived)
+    .filter((i) => {
+      if (i.archived) return false;
+      if (i.dateFin   && parseLocalDate(i.dateFin)   < ref) return false;
+      if (i.dateDebut && parseLocalDate(i.dateDebut) > ref) return false;
+      return true;
+    })
     .reduce((s, i) => s + (i.direction === "revenu" ? 1 : -1) * toMensuel(i), 0);
 }
 
 export function computeScenarioNet(
   baseItems: BaseItem[],
-  scenarioItems: ScenarioItem[]
+  scenarioItems: ScenarioItem[],
+  refDate?: Date
 ): number {
   return (
-    computeBaseNet(baseItems) +
+    computeBaseNet(baseItems, refDate) +
     scenarioItems.reduce(
       (s, i) => s + (i.direction === "revenu" ? 1 : -1) * toMensuel(i),
       0

@@ -6,6 +6,9 @@ import { X } from "lucide-react";
 import { MobileTopBar } from "@/components/ui/MobileTopBar";
 import { cn } from "@/lib/cn";
 import { animate } from "animejs";
+import { usePreferencesStore } from "@/store/preferences";
+import { THEME_REGISTRY, themeToCSS } from "@/lib/themes";
+import { FinanceSyncProvider } from "@/components/FinanceSyncProvider";
 
 export interface AppShellProps {
   sidebar: React.ReactNode;
@@ -15,77 +18,77 @@ export interface AppShellProps {
 
 function AmbientBackground() {
   return (
-    <div
-      className="fixed inset-0 pointer-events-none overflow-hidden"
-      style={{ zIndex: 0 }}
-      aria-hidden="true"
-    >
-      <div
-        style={{
-          position: "absolute",
-          width: 900,
-          height: 900,
-          left: -220,
-          top: "15%",
-          borderRadius: "50%",
-          background: "radial-gradient(circle, #8b5cf6 0%, transparent 70%)",
-          filter: "blur(90px)",
-          opacity: 0.07,
-          animation: "ambient-1 28s ease-in-out infinite",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          width: 700,
-          height: 700,
-          right: -150,
-          top: "5%",
-          borderRadius: "50%",
-          background: "radial-gradient(circle, #10b981 0%, transparent 70%)",
-          filter: "blur(80px)",
-          opacity: 0.05,
-          animation: "ambient-2 35s ease-in-out infinite",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          width: 500,
-          height: 500,
-          left: "45%",
-          bottom: -80,
-          borderRadius: "50%",
-          background: "radial-gradient(circle, #f59e0b 0%, transparent 70%)",
-          filter: "blur(70px)",
-          opacity: 0.04,
-          animation: "ambient-3 22s ease-in-out infinite",
-        }}
-      />
+    <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }} aria-hidden="true">
+      <div style={{
+        position: "absolute", width: 900, height: 900,
+        left: -220, top: "15%", borderRadius: "50%",
+        background: "radial-gradient(circle, var(--ambient-orb1) 0%, transparent 70%)",
+        filter: "blur(90px)",
+        opacity: "var(--ambient-orb1-opacity)" as unknown as number,
+        animation: "ambient-1 28s ease-in-out infinite",
+        transition: "opacity 280ms ease",
+      }} />
+      <div style={{
+        position: "absolute", width: 700, height: 700,
+        right: -150, top: "5%", borderRadius: "50%",
+        background: "radial-gradient(circle, var(--ambient-orb2) 0%, transparent 70%)",
+        filter: "blur(80px)",
+        opacity: "var(--ambient-orb2-opacity)" as unknown as number,
+        animation: "ambient-2 35s ease-in-out infinite",
+        transition: "opacity 280ms ease",
+      }} />
+      <div style={{
+        position: "absolute", width: 500, height: 500,
+        left: "45%", bottom: -80, borderRadius: "50%",
+        background: "radial-gradient(circle, var(--ambient-orb3) 0%, transparent 70%)",
+        filter: "blur(70px)",
+        opacity: "var(--ambient-orb3-opacity)" as unknown as number,
+        animation: "ambient-3 22s ease-in-out infinite",
+        transition: "opacity 280ms ease",
+      }} />
     </div>
   );
 }
 
 export function AppShell({ sidebar, title = "Fintrack", children }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const pathname = usePathname();
-  const mainRef = useRef<HTMLElement>(null);
+  const pathname  = usePathname();
+  const mainRef   = useRef<HTMLElement>(null);
+  const shellRef  = useRef<HTMLDivElement>(null);
+  const themeId   = usePreferencesStore((s) => s.theme);
+  const prevTheme = useRef(themeId);
 
-  // Page entrance animation on route change
+  // Inject full CSS token set on mount and theme change
+  useEffect(() => {
+    const el = shellRef.current;
+    if (!el) return;
+    const theme = THEME_REGISTRY[themeId] ?? THEME_REGISTRY["midnight"];
+    const vars  = themeToCSS(theme);
+    Object.entries(vars).forEach(([k, v]) => el.style.setProperty(k, v));
+
+    // Also set color-scheme for Sky (light) theme
+    el.style.colorScheme = theme.isDark ? "dark" : "light";
+  }, [themeId]);
+
+  // Flash when theme changes (skip initial mount)
+  useEffect(() => {
+    if (prevTheme.current === themeId) return;
+    prevTheme.current = themeId;
+    const el = shellRef.current;
+    if (!el) return;
+    animate(el, { opacity: [0.6, 1], duration: 260, ease: "outQuart" });
+  }, [themeId]);
+
+  // Page entrance animation
   useEffect(() => {
     if (!mainRef.current) return;
     const anim = animate(mainRef.current, {
-      opacity: [0, 1],
-      translateY: [12, 0],
-      duration: 320,
-      ease: "outQuart",
+      opacity: [0, 1], translateY: [12, 0], duration: 320, ease: "outQuart",
     });
     return () => { anim.pause(); };
   }, [pathname]);
 
-  useEffect(() => {
-    setDrawerOpen(false);
-  }, [pathname]);
+  useEffect(() => { setDrawerOpen(false); }, [pathname]);
 
   useEffect(() => {
     document.body.style.overflow = drawerOpen ? "hidden" : "";
@@ -93,7 +96,12 @@ export function AppShell({ sidebar, title = "Fintrack", children }: AppShellProp
   }, [drawerOpen]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-surface" style={{ position: "relative" }}>
+    <div
+      ref={shellRef}
+      data-theme={themeId}
+      className="flex h-screen overflow-hidden bg-surface"
+      style={{ position: "relative" }}
+    >
       <AmbientBackground />
 
       {/* Desktop sidebar */}
@@ -101,7 +109,7 @@ export function AppShell({ sidebar, title = "Fintrack", children }: AppShellProp
         {sidebar}
       </div>
 
-      {/* Mobile drawer overlay */}
+      {/* Mobile overlay */}
       {drawerOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/60 md:hidden backdrop-blur-sm"
@@ -110,7 +118,7 @@ export function AppShell({ sidebar, title = "Fintrack", children }: AppShellProp
         />
       )}
 
-      {/* Mobile drawer panel */}
+      {/* Mobile drawer */}
       <div
         className={cn(
           "fixed inset-y-0 left-0 z-50 flex flex-col md:hidden transition-transform duration-300",
@@ -130,16 +138,13 @@ export function AppShell({ sidebar, title = "Fintrack", children }: AppShellProp
         {sidebar}
       </div>
 
-      {/* Main column */}
-      <div
-        className="flex flex-col flex-1 min-w-0 overflow-hidden"
-        style={{ position: "relative", zIndex: 1 }}
-      >
+      {/* Main */}
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden" style={{ position: "relative", zIndex: 1 }}>
         <div className="md:hidden shrink-0">
           <MobileTopBar title={title} onMenuOpen={() => setDrawerOpen(true)} />
         </div>
         <main ref={mainRef} className="flex-1 overflow-y-auto">
-          {children}
+          <FinanceSyncProvider>{children}</FinanceSyncProvider>
         </main>
       </div>
     </div>

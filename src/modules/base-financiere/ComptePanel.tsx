@@ -27,6 +27,8 @@ const EMPTY: Omit<Compte, "id" | "createdAt"> = {
   institution: "",
   solde: 0,
   includedInRunway: true,
+  decouvertAutorise: undefined,
+  billingDay: undefined,
 };
 
 export function ComptePanel({ open, compte, onClose, onSave }: ComptePanelProps) {
@@ -43,6 +45,8 @@ export function ComptePanel({ open, compte, onClose, onSave }: ComptePanelProps)
               institution: compte.institution,
               solde: compte.solde,
               includedInRunway: compte.includedInRunway,
+              decouvertAutorise: compte.decouvertAutorise,
+              billingDay: compte.billingDay,
             }
           : EMPTY
       );
@@ -116,15 +120,35 @@ export function ComptePanel({ open, compte, onClose, onSave }: ComptePanelProps)
               label="Type"
               options={TYPE_OPTIONS}
               value={form.type}
-              onChange={(e) => set("type", e.target.value as CompteType)}
+              onChange={(e) => {
+                const t = e.target.value as CompteType;
+                set("type", t);
+                if (t === "credit") set("includedInRunway", false);
+              }}
             />
-            <Input
-              label="Solde actuel (€)"
-              type="number"
-              placeholder="0"
-              value={form.solde !== 0 ? String(form.solde) : ""}
-              onChange={(e) => set("solde", parseFloat(e.target.value) || 0)}
-            />
+            {form.type === "credit" ? (
+              <div className="flex flex-col gap-1">
+                <Input
+                  label="Montant dû ce mois (€)"
+                  type="number"
+                  placeholder="0"
+                  min="0"
+                  value={form.solde !== 0 ? String(Math.abs(form.solde)) : ""}
+                  onChange={(e) => set("solde", -(parseFloat(e.target.value) || 0))}
+                />
+                <p className="text-[10px] text-ink-ghost leading-snug">
+                  Montant du dernier relevé · reporté automatiquement en dépense ce mois
+                </p>
+              </div>
+            ) : (
+              <Input
+                label="Solde actuel (€)"
+                type="number"
+                placeholder="0"
+                value={form.solde !== 0 ? String(form.solde) : ""}
+                onChange={(e) => set("solde", parseFloat(e.target.value) || 0)}
+              />
+            )}
           </div>
 
           <Input
@@ -134,12 +158,46 @@ export function ComptePanel({ open, compte, onClose, onSave }: ComptePanelProps)
             onChange={(e) => set("institution", e.target.value)}
           />
 
-          <Toggle
-            label="Inclure dans le runway"
-            description="Ce solde est pris en compte dans le calcul de trésorerie."
-            checked={form.includedInRunway}
-            onChange={(e) => set("includedInRunway", e.target.checked)}
-          />
+          {form.type === "credit" ? (
+            <Input
+              label="Jour de prélèvement (1–31)"
+              type="number"
+              placeholder="Ex. : 24"
+              min="1"
+              max="31"
+              value={form.billingDay != null ? String(form.billingDay) : ""}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                set("billingDay", isNaN(v) ? undefined : Math.min(31, Math.max(1, v)));
+              }}
+            />
+          ) : (
+            <Input
+              label="Découvert autorisé (€)"
+              type="number"
+              placeholder="Ex. : 500"
+              value={form.decouvertAutorise != null ? String(form.decouvertAutorise) : ""}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value);
+                set("decouvertAutorise", isNaN(v) || v <= 0 ? undefined : v);
+              }}
+            />
+          )}
+
+          {form.type === "credit" ? (
+            <p className="text-[11px] text-ink-ghost leading-snug px-0.5">
+              Un compte Crédit n&apos;est jamais compté dans le solde du jour : le montant dû est
+              automatiquement ajouté comme dépense à sa date de prélèvement, pour éviter de le
+              déduire deux fois.
+            </p>
+          ) : (
+            <Toggle
+              label="Inclure dans le runway"
+              description="Ce solde est pris en compte dans le calcul de trésorerie."
+              checked={form.includedInRunway}
+              onChange={(e) => set("includedInRunway", e.target.checked)}
+            />
+          )}
         </div>
 
         <div className="flex gap-2 px-5 py-4 border-t border-border shrink-0">
