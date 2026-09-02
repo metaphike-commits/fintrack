@@ -32,3 +32,28 @@ Thumbs.db
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# ============================================
+# PRIVATE DATA — never commit real financial data
+# ============================================
+# Fintrack stores real user data in browser localStorage, not in files —
+# nothing below is currently written by the app. These rules exist as a
+# safety net for real bank statements, exports, backups, or logs that may
+# be manually dropped into the project folder during local use.
+.local-data/
+private-data/
+user-data/
+/exports/
+/imports/
+/backups/
+/logs/
+
+# common bank/finance export formats, anywhere they show up
+*.ofx
+*.qif
+
+# statement-like files accidentally dropped at the repo root
+/*.csv
+/*.pdf
+/*.xls
+/*.xlsx

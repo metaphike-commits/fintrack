@@ -1,0 +1,43 @@
+#!/bin/sh
+# Lightweight pre-commit safety check — blocks obviously-sensitive financial
+# files from being committed. No dependencies, no framework. Enabled locally
+# by: git config core.hooksPath .githooks   (one-time, see README)
+#
+# This is a net, not a guarantee. Real Fintrack data lives in browser
+# localStorage and is never written to this repo by the app itself — this
+# hook only guards against manually dropping a real file into the project
+# folder and running `git add .` without noticing.
+
+blocked=0
+
+# 1. Suspicious file types/names among staged files (allow the known-safe
+#    pdf.js worker asset explicitly).
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+for f in $staged; do
+  case "$f" in
+    public/pdf.worker.min.mjs) continue ;;
+    *.pdf|*.csv|*.xls|*.xlsx|*.ofx|*.qif)
+      echo "PRE-COMMIT BLOCK: staged file looks like a financial document/export: $f"
+      blocked=1
+      ;;
+    *releve*|*statement*|*extrait*|*private-data/*|*user-data/*|*.local-data/*|*/exports/*|*/imports/*|*/backups/*|*/logs/*)
+      echo "PRE-COMMIT BLOCK: staged file path looks like private financial data: $f"
+      blocked=1
+      ;;
+  esac
+done
+
+# 2. IBAN-shaped content in the staged diff (best-effort, not exhaustive).
+if git diff --cached -U0 | grep -qE '^\+[^+].*\b[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}\b'; then
+  echo "PRE-COMMIT BLOCK: staged diff contains an IBAN-shaped string."
+  blocked=1
+fi
+
+if [ "$blocked" = "1" ]; then
+  echo ""
+  echo "Commit blocked by .githooks/pre-commit. If this is a false positive,"
+  echo "re-run with: git commit --no-verify"
+  exit 1
+fi
+
+exit 0

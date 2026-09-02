@@ -91,6 +91,14 @@ npm run dev
 
 Open `http://localhost:3000`. AI-assisted features degrade gracefully without an API key (deterministic fallbacks / clearly-labeled "unavailable" state) — the core app works without one.
 
+Optional, recommended if you'll use this with real financial data: `git config core.hooksPath .githooks` enables a local pre-commit check that blocks obviously-sensitive files (statements, exports, IBAN-shaped strings) from being committed by accident. See "Data & privacy" below.
+
+## Data & privacy
+
+All app data (accounts, transactions, scenarios, budget, patrimoine, onboarding state) lives in the browser's `localStorage`, under keys prefixed `fts-*` — never in this repository, never in a file, never sent anywhere except the OpenAI calls described above. The app itself never writes to disk. If you use this with real financial data locally: it stays in your browser only, is not affected by `git` operations on this folder, and is not backed up by cloning/pulling/pushing this repo. For a backup, use the JSON export on `/settings` (downloads `fintrack-backup-<date>.json` straight from the browser, no server involved) — not git.
+
+`.local-data/`, `private-data/`, `user-data/`, `/exports/`, `/imports/`, `/backups/`, and `/logs/` are gitignored if you ever want a local scratch folder for anything personal — nothing writes there today.
+
 ## Project status
 
 Personal working prototype, actively developed. Local-only: no deployed instance, no multi-user support, no server-side database — all data lives in the browser. Development history and open items are tracked in `docs/HANDOFF.md`, `docs/TASKS.md`, and `docs/DECISIONS.md` (architecture decisions, ADR-numbered).
